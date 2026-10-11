@@ -1,0 +1,114 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Diagnostic reports
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+.node_repl_history
+
+# Testing and coverage
+coverage/
+*.lcov
+.nyc_output/
+test-results/
+playwright-report/
+cypress/videos/
+cypress/screenshots/
+
+# Build output
+dist/
+build/
+out/
+lib-cov/
+
+# Package managers
+.npm/
+.pnpm-store/
+.pnp.*
+.yarn/cache/
+.yarn/unplugged/
+.yarn/build-state.yml
+.yarn/install-state.gz
+.yarn-integrity
+
+# Caches
+.cache/
+.parcel-cache/
+.vite/
+.turbo/
+.fusebox/
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+
+# Frontend frameworks
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+.vuepress/dist/
+.docusaurus/
+.astro/
+
+# Vite
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+
+# Serverless and deployment
+.serverless/
+.vercel/
+.netlify/
+
+# Local PostgreSQL data and backups
+pgdata/
+postgres-data/
+postgresql-data/
+*.dump
+*.backup
+*.bak
+*.sql.gz
+
+# Uploaded files
+uploads/*
+!uploads/.gitkeep
+
+# IDE
+.idea/
+.vscode-test/
+*.swp
+*.swo
+
+# Operating system
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.orig
+*.rej
+
+# npm pack output
+*.tgz
