@@ -5,7 +5,7 @@ A full-stack personal financial application for tracking income and expenses, se
 ![CI](https://github.com/<your-username>/Finance-Management-Webapp/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
-**Live demo:** _coming soon (add the deployed URL here once the app is live)_
+**Live demo:** _coming soon_
 
 <!-- ![Dashboard](docs/screenshots/dashboard.png) -->
 
