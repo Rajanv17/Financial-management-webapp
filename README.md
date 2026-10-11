@@ -52,8 +52,8 @@ A full-stack personal financial application for tracking income and expenses, se
 
 ```
 Financial-Management-Webapp/
-├── Backend/              # Express API (routes, controllers, services, models, middleware)
-├── Frontend/             # React dashboard (shadcn/ui + Tailwind)
+├── backend/              # Express API (routes, controllers, services, models, middleware)
+├── frontend/             # React dashboard (shadcn/ui + Tailwind)
 ├── .github/
 │   └── workflows/        # CI pipelines (lint + test on every push and PR)
 ├── .env.example          # Environment variable names (no real values)
@@ -75,7 +75,7 @@ Financial-Management-Webapp/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/Financial-Management-Webapp.git
+git clone https://github.com/Rajanv17/Financial-management-webapp
 cd Financial-Management-Webapp
 ```
 
@@ -88,10 +88,10 @@ createdb finance_app
 ### 3. Set up the backend
 
 ```bash
-cd Backend
+cd backend
 npm install
 cp .env.example .env     # then fill in your own values
-# run database migrations here (add the command for your setup)
+# run database migrations here
 npm run dev
 ```
 
@@ -100,7 +100,7 @@ npm run dev
 Open a second terminal:
 
 ```bash
-cd Frontend
+cd frontend
 npm install
 npm run dev
 ```
@@ -132,7 +132,7 @@ Copy `.env.example` to `.env` in the `Backend` folder and fill in the values. Ne
 
 Short notes on why things are built the way they are. This section grows as the project does.
 
-- **Single repository, separate `Backend` and `Frontend` folders.** One place to clone, review, and run CI, while keeping the API and the UI independently deployable.
+- **Single repository, separate `backend` and `frontend` folders.** One place to clone, review, and run CI, while keeping the API and the UI independently deployable.
 - **PostgreSQL for financial data.** Money data is relational by nature (users, categories, transactions, budgets), and ACID transactions plus foreign key constraints keep balances and references consistent. SQL aggregations power the dashboard totals and budget vs. actual comparisons.
 - **Decimal types for money.** Amounts are stored as exact decimals, never floating point, to avoid rounding errors.
 - **Stateless auth with JWT.** Keeps the API simple to scale and easy to test.
