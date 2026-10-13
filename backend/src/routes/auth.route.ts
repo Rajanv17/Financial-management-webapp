@@ -8,7 +8,7 @@ import {
   deleteUser,
   logoutUser,
 } from "../controllers/index";
-import { verifyJWT } from "../middlewares/index";
+import { verifyJWT } from "../middlewares";
 
 const router = Router();
 

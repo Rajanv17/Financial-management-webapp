@@ -1,50 +1,62 @@
-import { Request, Response } from "express";
-import { ApiError, ApiResponse } from "../utils/index";
+import { Response } from "express";
+import { prisma } from "../config";
+import {
+  ApiError,
+  ApiResponse,
+  optionalString,
+  parseEnum,
+  requireId,
+  requireString,
+} from "../utils/index";
 import { AuthenticatedRequest } from "../middlewares/index";
-import { CategoryModel } from "../models/index";
+import { TransactionType } from "../generated/prisma/enums";
+
+const CATEGORY_TYPES = Object.values(TransactionType);
+const DUPLICATE_MESSAGE =
+  "Category with the same name and type already exists (it may be archived)";
+
+const requireUserId = (req: AuthenticatedRequest): string => {
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized request");
+  }
+  return userId;
+};
 
 const createCategory = async (req: AuthenticatedRequest, res: Response) => {
-  const { name, type, icon, color } = req.body;
+  const userId = requireUserId(req);
+  const body = req.body;
 
-  const categoryExist = await CategoryModel.findOne({
-    name,
-    userId: req.user?.id,
-  });
+  const name = requireString(body.name, "Name", 50);
+  const type = parseEnum(body.type, CATEGORY_TYPES, "Type");
+  const icon = optionalString(body.icon, "Icon", 50);
+  const color = optionalString(body.color, "Color", 9);
 
-  if (categoryExist) {
-    throw new ApiError(400, "Category with the same name already exists");
+  try {
+    const category = await prisma.category.create({
+      data: { name, type, userId, isDefault: false, icon, color },
+    });
+
+    return res
+      .status(201)
+      .json(new ApiResponse(201, category, "Category created successfully"));
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      throw new ApiError(400, DUPLICATE_MESSAGE);
+    }
+    throw error;
   }
-
-  const category = await CategoryModel.create({
-    name,
-    type,
-    userId: req.user?.id,
-    isDefault: false,
-    icon,
-    color,
-    isArchived: false,
-  });
-
-  if (!category) {
-    throw new ApiError(500, "Something went wrong while creating category");
-  }
-
-  return res
-    .status(201)
-    .json(new ApiResponse(201, category, "Category created successfully"));
 };
 
 const fetchCategories = async (req: AuthenticatedRequest, res: Response) => {
-  const currentUserId = req.user?.id;
+  const userId = requireUserId(req);
 
-  const categories = await CategoryModel.find({
-    $or: [{ isDefault: true }, { userId: currentUserId }],
-    isArchived: false,
+  const categories = await prisma.category.findMany({
+    where: {
+      OR: [{ isDefault: true }, { userId }],
+      isArchived: false,
+    },
   });
-
-  if (!categories || categories.length === 0) {
-    throw new ApiError(404, "No categories found");
-  }
 
   return res
     .status(200)
@@ -52,57 +64,71 @@ const fetchCategories = async (req: AuthenticatedRequest, res: Response) => {
 };
 
 const updateCategory = async (req: AuthenticatedRequest, res: Response) => {
-  const categoryId = req.params.id;
-  const { name, type, icon, color } = req.body;
+  const userId = requireUserId(req);
+  const categoryId = requireId(req.params.id, "Category id");
+  const body = req.body;
 
-  const categoryExist = await CategoryModel.findOne({
-    name,
-    userId: req.user?.id,
+  const existingCategory = await prisma.category.findFirst({
+    where: { id: categoryId, userId, isDefault: false },
   });
 
-  if (categoryExist) {
-    throw new ApiError(400, "Category with the same name already exists");
+  if (!existingCategory) {
+    throw new ApiError(404, "Category not found");
   }
 
-  const category = await CategoryModel.findOneAndUpdate(
-    {
-      _id: categoryId,
-      userId: req.user?.id,
-    },
-    {
-      name,
-      icon,
-      type,
-      color,
-    },
-    { new: true }
-  );
-
-  if (!category) {
-    throw new ApiError(500, "Something went wrong while updating category");
+  if (body.type !== undefined && body.type !== existingCategory.type) {
+    throw new ApiError(400, "Category type cannot be changed");
   }
 
-  return res
-    .status(200)
-    .json(new ApiResponse(200, category, "Category updated successfully"));
+  const data = {
+    ...(body.name !== undefined && {
+      name: requireString(body.name, "Name", 50),
+    }),
+    ...(body.icon !== undefined && {
+      icon: optionalString(body.icon, "Icon", 50),
+    }),
+    ...(body.color !== undefined && {
+      color: optionalString(body.color, "Color", 9),
+    }),
+  };
+
+  if (Object.keys(data).length === 0) {
+    throw new ApiError(400, "No fields to update");
+  }
+
+  try {
+    const category = await prisma.category.update({
+      where: { id: categoryId },
+      data,
+    });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, category, "Category updated successfully"));
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      throw new ApiError(400, DUPLICATE_MESSAGE);
+    }
+    throw error;
+  }
 };
 
 const archiveCategory = async (req: AuthenticatedRequest, res: Response) => {
-  const categoryId = req.params.id;
+  const userId = requireUserId(req);
+  const categoryId = requireId(req.params.id, "Category id");
 
-  const category = await CategoryModel.findOneAndUpdate(
-    {
-      _id: categoryId,
-      userId: req.user!.id,
-      isArchived: false,
-    },
-    { isArchived: true, archivedAt: new Date() },
-    { new: true }
-  );
+  const existingCategory = await prisma.category.findFirst({
+    where: { id: categoryId, userId, isDefault: false, isArchived: false },
+  });
 
-  if (!category) {
-    throw new ApiError(500, "Something went wrong while archiving category");
+  if (!existingCategory) {
+    throw new ApiError(404, "Category not found");
   }
+
+  const category = await prisma.category.update({
+    where: { id: categoryId },
+    data: { isArchived: true, archivedAt: new Date() },
+  });
 
   return res
     .status(200)
@@ -110,25 +136,27 @@ const archiveCategory = async (req: AuthenticatedRequest, res: Response) => {
 };
 
 const restoreCategory = async (req: AuthenticatedRequest, res: Response) => {
-  const categoryId = req.params.id;
+  const userId = requireUserId(req);
+  const categoryId = requireId(req.params.id, "Category id");
 
-  const category = await CategoryModel.findOneAndUpdate(
-    {
-      _id: categoryId,
-      userId: req.user!.id,
-      isArchived: true,
-    },
-    { isArchived: false, archivedAt: undefined },
-    { new: true }
-  );
+  const existingCategory = await prisma.category.findFirst({
+    where: { id: categoryId, userId, isDefault: false, isArchived: true },
+  });
 
-  if (!category) {
-    throw new ApiError(500, "Something went wrong while restoring category");
+  if (!existingCategory) {
+    throw new ApiError(404, "Category not found");
   }
+
+  const restoredCategory = await prisma.category.update({
+    where: { id: categoryId },
+    data: { isArchived: false, archivedAt: null },
+  });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, category, "Category restored successfully"));
+    .json(
+      new ApiResponse(200, restoredCategory, "Category restored successfully"),
+    );
 };
 
 export {

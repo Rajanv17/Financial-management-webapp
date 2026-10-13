@@ -1,113 +1,117 @@
-import { UserModel } from "../models/index";
 import { Request, Response } from "express";
-import { ApiError, ApiResponse } from "../utils/index";
+import crypto from "crypto";
 import jwt, { JwtPayload } from "jsonwebtoken";
+import { prisma } from "../config/prisma";
+import {
+  ApiError,
+  ApiResponse,
+  hashPassword,
+  normalizeIdentifier,
+  generateAccessToken,
+  generateRefreshToken,
+  comparePassword,
+} from "../utils/index";
 import { AuthenticatedRequest } from "../middlewares/index";
 
-const generateAccessAndRefreshTokens = async (userId: string) => {
-  try {
-    const user = await UserModel.findById(userId);
+const publicUserSelect = {
+  id: true,
+  username: true,
+  email: true,
+  createdAt: true,
+} as const;
 
-    if (!user) {
-      throw new ApiError(404, "User not found");
-    }
+const cookieOptions = { httpOnly: true, secure: true };
 
-    const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshToken();
+const hashToken = (token: string) =>
+  crypto.createHash("sha256").update(token).digest("hex");
 
-    user.refreshToken = refreshToken;
-    await user.save();
+const issueTokens = async (user: {
+  id: string;
+  username: string;
+  email: string;
+}) => {
+  const accessToken = generateAccessToken(user);
+  const refreshToken = generateRefreshToken(user.id);
 
-    return { accessToken, refreshToken };
-  } catch (error) {
-    throw new ApiError(
-      500,
-      "Something went wrong while generating refresh or access tokens",
-    );
-  }
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { refreshToken: hashToken(refreshToken) },
+  });
+
+  return { accessToken, refreshToken };
 };
 
-// Register a new user
 const registerUser = async (req: Request, res: Response) => {
   const { username, email, password } = req.body;
-  if ([username, email, password].some((field) => field?.trim() === "")) {
+
+  if (
+    ![username, email, password].every(
+      (f) => typeof f === "string" && f.trim() !== "",
+    )
+  ) {
     throw new ApiError(400, "All fields are required");
   }
 
-  const existingUser = await UserModel.findOne({
-    $or: [{ username }, { email }],
-  });
+  const passwordHash = await hashPassword(password);
 
-  if (existingUser) {
-    throw new ApiError(400, "User already exists with given username or email");
+  try {
+    const user = await prisma.user.create({
+      data: {
+        username: normalizeIdentifier(username),
+        email: normalizeIdentifier(email),
+        passwordHash,
+      },
+      select: publicUserSelect,
+    });
+
+    return res
+      .status(201)
+      .json(new ApiResponse(201, user, "User registered successfully"));
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      throw new ApiError(
+        400,
+        "User already exists with given username or email",
+      );
+    }
+    throw error;
   }
-
-  const user = await UserModel.create({
-    username,
-    email,
-    password,
-  });
-
-  const createdUser = await UserModel.findById(user._id).select(
-    "-password -refreshToken",
-  );
-
-  if (!createdUser) {
-    throw new ApiError(500, "Something went wrong while creating user");
-  }
-
-  return res
-    .status(201)
-    .json(new ApiResponse(201, createdUser, "User registered successfully"));
 };
 
-// Login user
 const loginUser = async (req: Request, res: Response) => {
   const { username, password } = req.body;
 
-  if (!username || !password) {
+  if (
+    typeof username !== "string" ||
+    typeof password !== "string" ||
+    !username.trim() ||
+    !password
+  ) {
     throw new ApiError(400, "Username and password are required");
   }
 
-  const user = await UserModel.findOne({
-    $or: [{ username }],
+  const user = await prisma.user.findUnique({
+    where: { username: normalizeIdentifier(username) },
   });
 
-  if (!user) {
-    throw new ApiError(400, "User not found");
+  const isPasswordValid =
+    user && (await comparePassword(password, user.passwordHash));
+
+  if (!user || !isPasswordValid) {
+    throw new ApiError(401, "Invalid username or password");
   }
 
-  const isPasswordValid = await user.comparePassword(password);
-
-  if (!isPasswordValid) {
-    throw new ApiError(400, "Invalid password");
-  }
-
-  const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
-    user._id as string,
-  );
-
-  const loggedInUser = await UserModel.findById(user._id).select(
-    "-password -refreshToken",
-  );
-
-  const options = {
-    httpOnly: true,
-    secure: true,
-  };
+  const { accessToken, refreshToken } = await issueTokens(user);
+  const { passwordHash, refreshToken: _rt, ...safeUser } = user;
 
   return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
     .json(
       new ApiResponse(
         200,
-        {
-          user: loggedInUser,
-          accessToken: accessToken,
-          refreshToken: refreshToken,
-        },
+        { user: safeUser, accessToken, refreshToken },
         "User logged in successfully",
       ),
     );
@@ -115,131 +119,123 @@ const loginUser = async (req: Request, res: Response) => {
 
 const logoutUser = async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user?.id;
+  if (!userId) throw new ApiError(401, "Unauthorized request");
 
-  const user = await UserModel.findById(
-    userId,
-    {
-      unset: {
-        refreshToken: "",
-      },
-    },
-    { new: true },
-  );
-
-  const options = {
-    httpOnly: true,
-    secure: true,
-  };
+  await prisma.user.update({
+    where: { id: userId },
+    data: { refreshToken: null },
+  });
 
   return res
     .status(200)
-    .clearCookie("accessToken", options)
-    .clearCookie("refreshToken", options)
+    .clearCookie("accessToken", cookieOptions)
+    .clearCookie("refreshToken", cookieOptions)
     .json(new ApiResponse(200, null, "User logged out successfully"));
 };
 
-// Get current user
 const fetchUser = async (req: AuthenticatedRequest, res: Response) => {
-  const user = await UserModel.findById(req.user?.id).select(
-    "-password -refreshToken",
-  );
+  const userId = req.user?.id;
+  if (!userId) throw new ApiError(401, "Unauthorized request");
 
-  if (!user) {
-    throw new ApiError(404, "User not found");
-  }
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: publicUserSelect,
+  });
+  if (!user) throw new ApiError(404, "User not found");
 
   return res
     .status(200)
     .json(new ApiResponse(200, user, "User details fetched successfully"));
 };
 
-// Refresh access token
 const refreshAccessToken = async (req: Request, res: Response) => {
-  const incomingRefreshToken =
-    req.cookies.refreshToken || req.body.refreshToken;
+  const incoming = req.cookies.refreshToken || req.body.refreshToken;
+  if (!incoming) throw new ApiError(401, "Unauthorized request");
 
-  if (!incomingRefreshToken) {
-    throw new ApiError(401, "Unauthorized request");
+  let decoded: JwtPayload;
+  try {
+    decoded = jwt.verify(
+      incoming,
+      process.env.REFRESH_TOKEN_SECRET as string,
+    ) as JwtPayload;
+  } catch {
+    throw new ApiError(401, "Invalid or expired refresh token");
+  }
+
+  if (typeof decoded.id !== "string") {
+    throw new ApiError(401, "Invalid or expired refresh token");
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: decoded.id } });
+
+  if (!user || user.refreshToken !== hashToken(incoming)) {
+    throw new ApiError(401, "Refresh token is expired or used");
+  }
+
+  const { accessToken, refreshToken } = await issueTokens(user);
+
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
+    .json(
+      new ApiResponse(
+        200,
+        { accessToken, refreshToken },
+        "Access token refreshed successfully",
+      ),
+    );
+};
+
+const updateUser = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user?.id;
+  if (!userId) throw new ApiError(401, "Unauthorized request");
+  const { username, email } = req.body;
+
+  const data = {
+    ...(typeof username === "string" &&
+      username.trim() !== "" && { username: normalizeIdentifier(username) }),
+    ...(typeof email === "string" &&
+      email.trim() !== "" && { email: normalizeIdentifier(email) }),
+  };
+
+  if (Object.keys(data).length === 0) {
+    throw new ApiError(400, "Provide a username or email to update");
   }
 
   try {
-    const decodedToken = jwt.verify(
-      incomingRefreshToken,
-      process.env.REFRESH_TOKEN_SECRET as string,
-    ) as JwtPayload;
-
-    const user = await UserModel.findById(decodedToken?._id);
-
-    if (!user) {
-      throw new ApiError(401, "Invalid refresh token");
-    }
-
-    if (user?.refreshToken !== incomingRefreshToken) {
-      throw new ApiError(401, "Refresh token is expired or used");
-    }
-
-    const options = {
-      httpOnly: true,
-      secure: true,
-    };
-
-    const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(
-      user._id,
-    );
-
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data,
+      select: publicUserSelect,
+    });
     return res
       .status(200)
-      .cookie("accessToken", accessToken, options)
-      .cookie("refreshToken", refreshToken, options)
-      .json(
-        new ApiResponse(
-          200,
-          {
-            accessToken,
-            refreshToken,
-          },
-          "Access token refreshed successfully",
-        ),
-      );
+      .json(new ApiResponse(200, user, "User updated successfully"));
   } catch (error: any) {
-    throw new ApiError(401, error?.message || "Invalid refresh token");
+    if (error?.code === "P2002")
+      throw new ApiError(400, "Username or email already taken");
+    if (error?.code === "P2025") throw new ApiError(404, "User not found");
+    throw error;
   }
 };
 
-// Update user details
-const updateUser = async (req: AuthenticatedRequest, res: Response) => {
-  const { username, email } = req.body;
-
-  const user = await UserModel.findByIdAndUpdate(
-    req.user?.id,
-    {
-      $set: { username, email },
-    },
-    { new: true },
-  ).select("-password -refreshToken");
-
-  if (!user) {
-    throw new ApiError(404, "User not found");
-  }
-
-  return res
-    .status(200)
-    .json(new ApiResponse(200, user, "User updated successfully"));
-};
-
-// Delete user
 const deleteUser = async (req: AuthenticatedRequest, res: Response) => {
-  const user = await UserModel.findByIdAndDelete(req.user?.id).select(
-    "-password -refreshToken",
-  );
+  const userId = req.user?.id;
+  if (!userId) throw new ApiError(401, "Unauthorized request");
 
-  if (!user) {
-    throw new ApiError(404, "User not found");
+  try {
+    await prisma.user.delete({ where: { id: userId } });
+  } catch (error: any) {
+    if (error?.code === "P2025") throw new ApiError(404, "User not found");
+    throw error;
   }
 
   return res
     .status(200)
-    .json(new ApiResponse(200, user, "User deleted successfully"));
+    .clearCookie("accessToken", cookieOptions)
+    .clearCookie("refreshToken", cookieOptions)
+    .json(new ApiResponse(200, null, "User deleted successfully"));
 };
 
 export {
