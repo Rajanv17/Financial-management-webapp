@@ -1,28 +1,29 @@
-import mongoose from "mongoose";
-import dotenv from "dotenv";
-import { CategoryModel } from "../models/index";
-import { defaultCategories } from "../config/index";
-dotenv.config();
+import { prisma } from "../config/prisma";
+import { defaultCategories } from "../config/defaultCategories";
 
 const seedCategories = async () => {
   try {
-    await mongoose.connect(`${process.env.MONGODB_URL}/${process.env.DB_NAME}`);
-    console.log("Connected to MongoDB for Seeding");
+    console.log("Connected to PostgreSQL for seeding");
 
-    const existingDefaults = await CategoryModel.find({ isDefault: true });
+    const existingDefaults = await prisma.category.count({
+      where: { isDefault: true },
+    });
 
-    if (existingDefaults.length > 0) {
+    if (existingDefaults > 0) {
       console.log("Default categories already exist");
-      process.exit();
+      return;
     }
 
-    await CategoryModel.insertMany(defaultCategories);
+    await prisma.category.createMany({
+      data: defaultCategories,
+      skipDuplicates: true,
+    });
     console.log("Default Categories Seeded Successfully!");
-
-    process.exit();
   } catch (error) {
     console.error("Seeding failed:", error);
-    process.exit(1);
+    process.exitCode = 1;
+  } finally {
+    await prisma.$disconnect();
   }
 };
 
