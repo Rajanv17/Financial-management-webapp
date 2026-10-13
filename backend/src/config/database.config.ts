@@ -1,4 +1,4 @@
-import { prisma } from "./prisma";
+import { prisma } from "./index";
 
 const connectDatabase = async (): Promise<void> => {
   try {
