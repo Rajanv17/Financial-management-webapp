@@ -1,8 +1,8 @@
-import mongoose from "mongoose";
+import { prisma } from "./prisma";
 
 const connectDatabase = async (): Promise<void> => {
   try {
-    await mongoose.connect(`${process.env.MONGODB_URL}/${process.env.DB_NAME}`);
+    await prisma.$connect();
     console.log("Database connected successfully");
   } catch (error) {
     console.log("Database connection failed");

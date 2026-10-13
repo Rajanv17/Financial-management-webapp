@@ -1,10 +1,12 @@
-export const defaultCategories = [
+import type { Prisma } from "../generated/prisma/client";
+
+export const defaultCategories: Prisma.CategoryCreateManyInput[] = [
   {
     name: "Food & Drinks",
     type: "expense",
     icon: "pizza",
     isDefault: true,
-    color: "#db63ffff",
+    color: "#db63ff",
   },
   {
     name: "Shopping",
@@ -67,7 +69,7 @@ export const defaultCategories = [
     type: "income",
     icon: "laptop",
     isDefault: true,
-    color: "#63ff63ff",
+    color: "#63ff63",
   },
   {
     name: "Rental Income",
@@ -81,6 +83,6 @@ export const defaultCategories = [
     type: "income",
     icon: "gift",
     isDefault: true,
-    color: "#ff2121ff",
+    color: "#ff2121",
   },
 ];
