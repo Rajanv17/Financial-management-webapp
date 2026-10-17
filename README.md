@@ -38,25 +38,26 @@ A full-stack personal financial application for tracking income and expenses, se
 
 ## Tech Stack
 
-| Layer          | Technology                                     |
-| -------------- | ---------------------------------------------- |
-| Frontend       | React, shadcn/ui, Tailwind CSS                 |
-| Backend        | Node.js, Express                               |
-| Database       | PostgreSQL                                     |
-| Authentication | JWT                                            |
-| CI/CD          | GitHub Actions, auto-deploy on merge to `main` |
+| Layer          | Technology                                       |
+| -------------- | ------------------------------------------------ |
+| Frontend       | React, TypeScript, Vite, shadcn/ui, Tailwind CSS |
+| Backend        | Node.js, Express, TypeScript                     |
+| Database       | PostgreSQL, Prisma ORM                           |
+| Authentication | JWT (access and refresh tokens)                  |
+| CI/CD          | GitHub Actions, auto-deploy on merge to `main`   |
 
 ---
 
 ## Project Structure
 
 ```
-Financial-Management-Webapp/
-├── backend/              # Express API (routes, controllers, services, models, middleware)
+Financial-management-webapp/
+├── backend/              # Express API (routes, controllers, services, middleware)
+│   ├── prisma/           # Prisma schema and migrations
+│   └── .env.example      # Environment variable names (no real values)
 ├── frontend/             # React dashboard (shadcn/ui + Tailwind)
 ├── .github/
-│   └── workflows/        # CI pipelines (lint + test on every push and PR)
-├── .env.example          # Environment variable names (no real values)
+│   └── workflows/        # CI pipeline (typecheck, lint, and build on every push and PR)
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -68,7 +69,7 @@ Financial-Management-Webapp/
 
 ### Prerequisites
 
-- Node.js 20 or later
+- Node.js 20.19 or later (CI runs on Node.js 24)
 - npm
 - PostgreSQL 14 or later (local install, Docker, or a hosted instance)
 
@@ -76,7 +77,7 @@ Financial-Management-Webapp/
 
 ```bash
 git clone https://github.com/Rajanv17/Financial-management-webapp
-cd Financial-Management-Webapp
+cd Financial-management-webapp
 ```
 
 ### 2. Create the database
@@ -91,6 +92,9 @@ createdb finance_app
 cd backend
 npm install
 cp .env.example .env     # then fill in your own values
+
+npm run migrate:dev      # create the tables from the Prisma migrations
+npm run seed:categories  # optional: add the default categories
 
 npm run dev
 ```
@@ -116,15 +120,16 @@ npm run dev
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` in the `Backend` folder and fill in the values. Never commit the real `.env` file.
+Copy `.env.example` to `.env` in the `backend` folder and fill in the values. Never commit the real `.env` file.
 
-| Variable         | Description                                                                                       |
-| ---------------- | ------------------------------------------------------------------------------------------------- |
-| `PORT`           | Port the API listens on                                                                           |
-| `DATABASE_URL`   | PostgreSQL connection string, for example `postgresql://user:password@localhost:5432/finance_app` |
-| `JWT_SECRET`     | Secret used to sign access tokens                                                                 |
-| `JWT_EXPIRES_IN` | Token lifetime (for example `1d`)                                                                 |
-| `CLIENT_URL`     | Frontend origin allowed by CORS                                                                   |
+| Variable                                        | Description                                                                                |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `NODE_ENV`                                      | `development` or `production`                                                              |
+| `PORT`                                          | Port the API listens on                                                                    |
+| `DATABASE_URL`                                  | PostgreSQL connection string, e.g. `postgresql://user:password@localhost:5432/finance_app` |
+| `CORS_ORIGIN`                                   | Exact frontend origin allowed by CORS, e.g. `http://localhost:5173`                        |
+| `ACCESS_TOKEN_SECRET` / `ACCESS_TOKEN_EXPIRY`   | Secret and lifetime for access tokens (e.g. `15m`)                                         |
+| `REFRESH_TOKEN_SECRET` / `REFRESH_TOKEN_EXPIRY` | Secret and lifetime for refresh tokens (e.g. `7d`)                                         |
 
 ---
 
@@ -144,8 +149,8 @@ Short notes on why things are built the way they are. This section grows as the 
 
 - **Branches:** `main` is protected and always deployable. New work happens on feature branches (for example `feat/budget-limits`) and merges through a pull request.
 - **Commits:** follow [Conventional Commits](https://www.conventionalcommits.org/), using `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, and `chore:`.
-- **CI:** every push and pull request runs linting and tests through GitHub Actions. A change merges only when the checks pass.
-- **Deploy:** merging to `main` triggers an automatic deployment of the backend and frontend.
+- **CI:** every push and pull request to `main` runs two GitHub Actions jobs. The backend job starts a PostgreSQL service container, applies the Prisma migrations, then typechecks and builds the API. The frontend job lints and builds the app. A change merges only when both jobs pass.
+- **Deploy:** not automated yet.
 
 ---
 
@@ -155,7 +160,7 @@ Contributions are welcome.
 
 1. Fork the repository and create a feature branch.
 2. Follow the existing code style and the commit convention above.
-3. Add or update tests for your change.
+3. Make sure `npm run typecheck` and `npm run build` pass in `backend`, and `npm run lint` and `npm run build` pass in `frontend`.
 4. Open a pull request describing what changed and why.
 
 ---
