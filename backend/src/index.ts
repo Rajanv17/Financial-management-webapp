@@ -4,6 +4,7 @@ import { connectDatabase } from "./config/index";
 import routes from "./routes/index";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
+import { errorHandler, notFoundHandler } from "./middlewares";
 
 dotenv.config();
 
@@ -35,3 +36,5 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api", routes);
+app.use(notFoundHandler);
+app.use(errorHandler);
