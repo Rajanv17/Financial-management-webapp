@@ -1,271 +1,346 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useEffect, useState } from "react";
 import {
-  ResponsiveContainer,
-  AreaChart,
-  Area,
-  PieChart,
-  Pie,
-  Cell,
-  BarChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
 } from "recharts";
+import { Money, PageHeader, StatusBadge } from "@/components/shared";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatINR } from "@/lib/format";
 
-const financialTrend = [
-  { month: "Jul", income: 4800, expense: 2000, savings: 800 },
-  { month: "Aug", income: 4600, expense: 1900, savings: 1000 },
-  { month: "Sep", income: 5000, expense: 2500, savings: 1200 },
-  { month: "Oct", income: 5200, expense: 1800, savings: 300 },
-  { month: "Nov", income: 5100, expense: 2400, savings: 1000 },
-  { month: "Dec", income: 5000, expense: 2600, savings: 1100 },
-  { month: "Jan", income: 5000, expense: 2800, savings: 1200 },
+const CHART_FILLS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+] as const;
+
+const axisAmount = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+const usePrefersReducedMotion = () => {
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduced(media.matches);
+    sync();
+    media.addEventListener("change", sync);
+    return () => media.removeEventListener("change", sync);
+  }, []);
+
+  return reduced;
+};
+
+// TODO(api): replace with analytics or dashboard aggregates when they exist.
+const SAMPLE_TREND = [
+  { month: "Jul", income: 48000, expense: 20000 },
+  { month: "Aug", income: 46000, expense: 19000 },
+  { month: "Sep", income: 50000, expense: 25000 },
+  { month: "Oct", income: 52000, expense: 18000 },
+  { month: "Nov", income: 51000, expense: 24000 },
+  { month: "Dec", income: 50000, expense: 26000 },
 ];
 
-const spendingByCategory = [
-  { name: "Food", value: 26, color: "#3b82f6" },
-  { name: "Shopping", value: 18, color: "#eab308" },
-  { name: "Utilities", value: 16, color: "#f97316" },
-  { name: "Transport", value: 13, color: "#22c55e" },
-  { name: "Entertainment", value: 10, color: "#a855f7" },
-  { name: "Health", value: 9, color: "#06b6d4" },
-  { name: "Other", value: 7, color: "#94a3b8" },
+// TODO(api)
+const SAMPLE_SPENDING = [
+  { name: "Food & Drinks", amount: 8500, fill: CHART_FILLS[0] },
+  { name: "Housing", amount: 15000, fill: CHART_FILLS[1] },
+  { name: "Shopping", amount: 4200, fill: CHART_FILLS[2] },
+  { name: "Transportation", amount: 3100, fill: CHART_FILLS[3] },
+  { name: "Life & Entertainment", amount: 2800, fill: CHART_FILLS[4] },
 ];
 
-const weeklySpending = [
-  { week: "Week 1", amount: 530 },
-  { week: "Week 2", amount: 680 },
-  { week: "Week 3", amount: 440 },
-  { week: "Week 4", amount: 590 },
+// TODO(api)
+const SAMPLE_INCOME = [
+  { name: "Salary", amount: 45000, fill: "var(--success)" },
+  { name: "Freelance", amount: 5000, fill: CHART_FILLS[0] },
+  { name: "Gifts", amount: 2000, fill: CHART_FILLS[2] },
 ];
 
-const expenseCategories = [
-  { category: "Food", value: 450, color: "#3b82f6" },
-  { category: "Transport", value: 375, color: "#22c55e" },
-  { category: "Entertainment", value: 225, color: "#a855f7" },
-  { category: "Shopping", value: 300, color: "#f97316" },
-  { category: "Health", value: 175, color: "#06b6d4" },
-  { category: "Utilities", value: 275, color: "#eab308" },
-  { category: "Other", value: 125, color: "#94a3b8" },
-];
+type MoneyTooltipProps = {
+  active?: boolean;
+  payload?: { name?: string; value?: number }[];
+  label?: string;
+};
 
-const incomeSources = [
-  { name: "Salary", value: 5000, color: "#22c55e" },
-  { name: "Investments", value: 800, color: "#a855f7" },
-  { name: "Other", value: 200, color: "#94a3b8" },
-];
+function MoneyTooltip({ active, payload, label }: MoneyTooltipProps) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-md border border-border bg-popover px-3 py-2 text-sm shadow-sm">
+      {label ? <p className="mb-1 font-medium text-foreground">{label}</p> : null}
+      {payload.map((entry) => (
+        <p key={entry.name} className="tabular-nums text-muted-foreground">
+          {entry.name}: {formatINR(entry.value ?? 0)}
+        </p>
+      ))}
+    </div>
+  );
+}
 
 export default function AnalyticsPage() {
-  const [activeTab, setActiveTab] = useState("overview");
+  const reduceMotion = usePrefersReducedMotion();
+  const [tab, setTab] = useState("overview");
 
   return (
-    <div className="space-y-6 text-foreground">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-bold tracking-tight">Analytics</h1>
-        <p className="text-muted-foreground">
-          Detailed insights into your finances.
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Analytics"
+        description="Sample charts for layout. These figures are not from your transactions and are not saved."
+        badge={<StatusBadge label="Preview – not saved" tone="warning" />}
+      />
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-3 shadow-sm">
-          <TabsTrigger value="overview" className="cursor-pointer">
-            Overview
-          </TabsTrigger>
-          <TabsTrigger value="expenses" className="cursor-pointer">
-            Expenses
-          </TabsTrigger>
-          <TabsTrigger value="income" className="cursor-pointer">
-            Income
-          </TabsTrigger>
+      <Tabs value={tab} onValueChange={setTab} className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="spending">Spending</TabsTrigger>
+          <TabsTrigger value="income">Income</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6 mt-6">
-          {/* Financial Trend Chart */}
-          <Card className="border-none shadow-md">
+        <TabsContent value="overview" className="space-y-6">
+          <Card>
             <CardHeader>
-              <CardTitle className="text-xl font-bold">
-                Financial Trend
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Income, expenses, and savings over time
-              </p>
+              <CardTitle>Income and expenses</CardTitle>
+              <CardDescription>
+                Sample monthly series. Two lines are plotted, matching the legend.
+              </CardDescription>
             </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={financialTrend}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Area
-                    type="monotone"
-                    dataKey="income"
-                    stackId="1"
-                    stroke="#22c55e"
-                    fill="#22c55e"
-                    name="Income"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="expense"
-                    stackId="1"
-                    stroke="#ef4444"
-                    fill="#ef4444"
-                    name="Expense"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="savings"
-                    stackId="1"
-                    stroke="#3b82f6"
-                    fill="#3b82f6"
-                    name="Savings"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <CardContent className="space-y-4">
+              <div className="h-72" aria-hidden="true">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={SAMPLE_TREND}>
+                    <CartesianGrid stroke="var(--border)" vertical={false} />
+                    <XAxis
+                      dataKey="month"
+                      tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
+                      tickLine={false}
+                      axisLine={{ stroke: "var(--border)" }}
+                    />
+                    <YAxis
+                      tickFormatter={(value: number) => axisAmount.format(value)}
+                      tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
+                      tickLine={false}
+                      axisLine={{ stroke: "var(--border)" }}
+                      width={64}
+                    />
+                    <Tooltip content={<MoneyTooltip />} />
+                    <Legend
+                      formatter={(value) => (
+                        <span className="text-sm text-foreground">{value}</span>
+                      )}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="income"
+                      name="Income"
+                      stroke="var(--success)"
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={!reduceMotion}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="expense"
+                      name="Expenses"
+                      stroke="var(--danger)"
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={!reduceMotion}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <table className="w-full text-sm">
+                <caption className="sr-only">Sample income and expenses by month</caption>
+                <thead>
+                  <tr className="border-b border-border text-left text-muted-foreground">
+                    <th className="py-2 font-medium">Month</th>
+                    <th className="py-2 text-right font-medium">Income</th>
+                    <th className="py-2 text-right font-medium">Expenses</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {SAMPLE_TREND.map((point) => (
+                    <tr key={point.month} className="border-b border-border last:border-0">
+                      <td className="py-2 text-foreground">{point.month}</td>
+                      <td className="py-2 text-right">
+                        <Money amount={point.income} type="income" />
+                      </td>
+                      <td className="py-2 text-right">
+                        <Money amount={point.expense} type="expense" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </CardContent>
           </Card>
+        </TabsContent>
 
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Spending by Category */}
-            <Card className="border-none shadow-md">
+        <TabsContent value="spending" className="space-y-6">
+          <div className="grid gap-6 lg:grid-cols-2">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-xl font-bold">
-                  Spending by Category
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  Current month breakdown
-                </p>
+                <CardTitle>Spending by category</CardTitle>
+                <CardDescription>Sample amounts, not a live breakdown.</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={spendingByCategory}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name}: ${value}%`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {spendingByCategory.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-center">
+                  <div className="h-64" aria-hidden="true">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={SAMPLE_SPENDING}
+                          dataKey="amount"
+                          nameKey="name"
+                          innerRadius={58}
+                          outerRadius={88}
+                          paddingAngle={2}
+                          isAnimationActive={!reduceMotion}
+                        >
+                          {SAMPLE_SPENDING.map((entry) => (
+                            <Cell key={entry.name} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <Tooltip content={<MoneyTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <ul className="space-y-2">
+                    {SAMPLE_SPENDING.map((item) => (
+                      <li
+                        key={item.name}
+                        className="flex items-center justify-between gap-3 text-sm"
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span
+                            className="size-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: item.fill }}
+                          />
+                          <span className="truncate text-foreground">{item.name}</span>
+                        </span>
+                        <Money amount={item.amount} className="shrink-0 text-muted-foreground" />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </CardContent>
             </Card>
 
-            {/* Weekly Spending */}
-            <Card className="border-none shadow-md">
+            <Card>
               <CardHeader>
-                <CardTitle className="text-xl font-bold">
-                  Weekly Spending
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  This month&apos;s weekly breakdown
-                </p>
+                <CardTitle>Category amounts</CardTitle>
+                <CardDescription>Same sample series as a bar chart.</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={weeklySpending}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="week" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="amount" fill="#3b82f6" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <div className="h-72" aria-hidden="true">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={SAMPLE_SPENDING}
+                      layout="vertical"
+                      margin={{ left: 8, right: 8 }}
+                    >
+                      <CartesianGrid stroke="var(--border)" horizontal={false} />
+                      <XAxis
+                        type="number"
+                        tickFormatter={(value: number) => axisAmount.format(value)}
+                        tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
+                        tickLine={false}
+                        axisLine={{ stroke: "var(--border)" }}
+                      />
+                      <YAxis
+                        type="category"
+                        dataKey="name"
+                        width={120}
+                        tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
+                        tickLine={false}
+                        axisLine={{ stroke: "var(--border)" }}
+                      />
+                      <Tooltip content={<MoneyTooltip />} />
+                      <Bar dataKey="amount" name="Amount" radius={[0, 4, 4, 0]}>
+                        {SAMPLE_SPENDING.map((entry) => (
+                          <Cell key={entry.name} fill={entry.fill} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
-        <TabsContent value="expenses" className="space-y-6 mt-6">
-          <Card className="border-none shadow-sm">
+        <TabsContent value="income">
+          <Card>
             <CardHeader>
-              <CardTitle className="text-xl font-bold">
-                Expense Categories
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Detailed breakdown of your spending
-              </p>
+              <CardTitle>Income sources</CardTitle>
+              <CardDescription>Sample amounts, not a live breakdown.</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart
-                  data={expenseCategories}
-                  layout="vertical"
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis dataKey="category" type="category" width={100} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#3b82f6" radius={[0, 4, 4, 0]}>
-                    {expenseCategories.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="income" className="space-y-6 mt-6">
-          <Card className="border-none shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-xl font-bold">
-                Income Sources
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Breakdown of your income streams
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center justify-center">
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={incomeSources}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, value }) => `${name}: $${value}`}
-                      outerRadius={100}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {incomeSources.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex gap-6 mt-4">
-                  {incomeSources.map((source) => (
-                    <div key={source.name} className="flex items-center gap-2">
-                      <div
-                        className="w-4 h-4 rounded"
-                        style={{ backgroundColor: source.color }}
-                      />
-                      <span className="text-sm">{source.name}</span>
-                    </div>
-                  ))}
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-center">
+                <div className="h-64" aria-hidden="true">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={SAMPLE_INCOME}
+                        dataKey="amount"
+                        nameKey="name"
+                        innerRadius={58}
+                        outerRadius={88}
+                        paddingAngle={2}
+                        isAnimationActive={!reduceMotion}
+                      >
+                        {SAMPLE_INCOME.map((entry) => (
+                          <Cell key={entry.name} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip content={<MoneyTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
+                <ul className="space-y-2">
+                  {SAMPLE_INCOME.map((item) => (
+                    <li
+                      key={item.name}
+                      className="flex items-center justify-between gap-3 text-sm"
+                    >
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="size-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: item.fill }}
+                        />
+                        <span className="truncate text-foreground">{item.name}</span>
+                      </span>
+                      <Money
+                        amount={item.amount}
+                        type="income"
+                        className="shrink-0"
+                      />
+                    </li>
+                  ))}
+                </ul>
               </div>
             </CardContent>
           </Card>
