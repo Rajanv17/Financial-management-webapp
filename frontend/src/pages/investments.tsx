@@ -1,196 +1,226 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Pencil, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  ConfirmDialog,
+  EmptyState,
+  Money,
+  PageHeader,
+  StatusBadge,
+} from "@/components/shared";
 import { Button } from "@/components/ui/button";
-import { Plus, TrendingUp, Pencil, Trash2 } from "lucide-react";
-import { AddInvestmentModal } from "@/components/modals/add-investment-modal";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InvestmentFormDialog } from "@/features/investments/investment-form-dialog";
+import {
+  INVESTMENT_TYPE_LABELS,
+  type Investment,
+  type InvestmentFormValues,
+} from "@/features/investments/types";
 
-const investments = [
+// TODO(api): replace with GET /investments when that backend exists.
+const SAMPLE_INVESTMENTS: Investment[] = [
   {
-    id: "1",
+    id: "preview-reliance",
     name: "Reliance Industries",
     type: "stocks",
-    currentValue: 6200,
     initialAmount: 5000,
+    currentValue: 5000,
     quantity: 40,
-    purchaseDate: "Jun 2023",
-    gain: 1200,
-    gainPercent: 24.0,
+    purchaseDate: "2023-06-15",
+    notes: "",
   },
   {
-    id: "2",
+    id: "preview-hdfc",
     name: "HDFC Mutual Fund",
-    type: "mutual funds",
-    currentValue: 11500,
+    type: "mutual_funds",
     initialAmount: 10000,
-    purchaseDate: "Jan 2023",
-    gain: 1500,
-    gainPercent: 15.0,
+    currentValue: 10000,
+    quantity: null,
+    purchaseDate: "2023-01-10",
+    notes: "",
   },
   {
-    id: "3",
-    name: "Bitcoin",
-    type: "crypto",
-    currentValue: 3800,
-    initialAmount: 3000,
-    quantity: 0.15,
-    purchaseDate: "Aug 2023",
-    gain: 800,
-    gainPercent: 26.67,
+    id: "preview-gold",
+    name: "Sovereign gold",
+    type: "gold",
+    initialAmount: 8000,
+    currentValue: 8000,
+    quantity: 2,
+    purchaseDate: "2024-03-01",
+    notes: "",
   },
 ];
 
-const typeColors: Record<string, string> = {
-  stocks: "bg-blue-100 text-blue-700",
-  "mutual funds": "bg-orange-100 text-orange-700",
-  crypto: "bg-purple-100 text-purple-700",
-};
+const formatPurchaseDate = (isoDate: string) =>
+  new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${isoDate}T00:00:00`));
+
+const toInvestment = (
+  values: InvestmentFormValues,
+  id: string,
+): Investment => ({
+  id,
+  name: values.name.trim(),
+  type: values.type,
+  initialAmount: Number(values.initialAmount),
+  currentValue: Number(values.currentValue),
+  quantity: values.quantity.trim() === "" ? null : Number(values.quantity),
+  purchaseDate: values.purchaseDate,
+  notes: values.notes.trim(),
+});
 
 export default function InvestmentsPage() {
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const totalInvested = investments.reduce(
-    (sum, inv) => sum + inv.initialAmount,
-    0
-  );
-  const totalValue = investments.reduce(
-    (sum, inv) => sum + inv.currentValue,
-    0
-  );
-  const totalGain = totalValue - totalInvested;
-  const totalGainPercent = (totalGain / totalInvested) * 100;
+  const [holdings, setHoldings] = useState<Investment[]>(SAMPLE_INVESTMENTS);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formNonce, setFormNonce] = useState(0);
+  const [editing, setEditing] = useState<Investment | null>(null);
+  const [removing, setRemoving] = useState<Investment | null>(null);
+
+  const openAdd = () => {
+    setEditing(null);
+    setFormNonce((value) => value + 1);
+    setFormOpen(true);
+  };
+
+  const handleSubmit = (values: InvestmentFormValues) => {
+    if (editing) {
+      setHoldings((current) =>
+        current.map((item) =>
+          item.id === editing.id ? toInvestment(values, editing.id) : item,
+        ),
+      );
+      toast.success("Preview updated. This is not saved.");
+    } else {
+      setHoldings((current) => [
+        ...current,
+        toInvestment(values, crypto.randomUUID()),
+      ]);
+      toast.success("Added to this preview only. Nothing was saved.");
+    }
+    setFormOpen(false);
+    setEditing(null);
+  };
 
   return (
-    <div className="space-y-6 text-foreground">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Investments</h1>
-          <p className="text-muted-foreground pt-2">
-            Track your portfolio performance.
-          </p>
-        </div>
-        <Button
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Investment
-        </Button>
-      </div>
-
-      <AddInvestmentModal
-        open={isAddModalOpen}
-        onOpenChange={setIsAddModalOpen}
+    <div className="space-y-6">
+      <PageHeader
+        title="Investments"
+        description="Manual tracking preview. Values are entered by you, not live market prices, and are not saved."
+        badge={<StatusBadge label="Preview – not saved" tone="warning" />}
+        action={
+          <Button type="button" onClick={openAdd}>
+            <Plus />
+            Add investment
+          </Button>
+        }
       />
 
-      {/* Summary Cards */}
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card className="border-none shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-medium text-muted-foreground">
-              Total Invested
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">
-              ₹{totalInvested.toLocaleString()}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-none shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-medium text-muted-foreground">
-              Current Value
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">₹{totalValue.toLocaleString()}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-none shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-lg font-medium text-muted-foreground">
-              Total Gain/Loss
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-green-600">
-              +₹{totalGain.toLocaleString()} ({totalGainPercent.toFixed(2)}%)
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Investment Cards */}
-      <div className="grid gap-6 md:grid-cols-3">
-        {investments.map((investment) => (
-          <Card
-            key={investment.id}
-            className="border-none shadow-sm hover:shadow-md transition-shadow"
-          >
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <CardTitle className="text-lg font-bold">
-                    {investment.name}
-                  </CardTitle>
-                  <span
-                    className={`inline-block mt-2 px-2 py-1 text-xs rounded-full ${
-                      typeColors[investment.type] || "bg-gray-100 text-gray-700"
-                    }`}
+      {holdings.length === 0 ? (
+        <EmptyState
+          title="No holdings in this preview"
+          description="Add an investment to see the layout. It stays in this browser tab only."
+          action={
+            <Button type="button" onClick={openAdd}>
+              <Plus />
+              Add investment
+            </Button>
+          }
+        />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {holdings.map((investment) => (
+            <Card key={investment.id}>
+              <CardHeader className="flex-row items-start justify-between gap-3">
+                <div className="space-y-2">
+                  <CardTitle className="text-lg">{investment.name}</CardTitle>
+                  <StatusBadge label={INVESTMENT_TYPE_LABELS[investment.type]} />
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Edit ${investment.name}`}
+                    onClick={() => {
+                      setEditing(investment);
+                      setFormOpen(true);
+                    }}
                   >
-                    {investment.type}
-                  </span>
+                    <Pencil />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Remove ${investment.name}`}
+                    onClick={() => setRemoving(investment)}
+                  >
+                    <Trash2 />
+                  </Button>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Pencil className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                  <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                    <Trash2 className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
                 <div>
-                  <p className="text-2xl font-bold">
-                    ₹{investment.currentValue.toLocaleString()}
+                  <p className="text-muted-foreground">Current value (manual)</p>
+                  <p className="text-2xl font-semibold">
+                    <Money amount={investment.currentValue} />
                   </p>
                 </div>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Initial:</span>
-                    <span className="font-medium">
-                      ₹{investment.initialAmount.toLocaleString()}
-                    </span>
-                  </div>
-                  {investment.quantity && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Quantity:</span>
-                      <span className="font-medium">{investment.quantity}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Purchased:</span>
-                    <span className="font-medium">
-                      {investment.purchaseDate}
-                    </span>
-                  </div>
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Amount invested</span>
+                  <Money amount={investment.initialAmount} />
                 </div>
-                <div className="pt-2 border-t">
-                  <div className="flex items-center gap-2 text-green-600">
-                    <TrendingUp className="h-4 w-4" />
-                    <span className="font-semibold">
-                      +₹{investment.gain.toLocaleString()} (
-                      {investment.gainPercent.toFixed(2)}%)
+                {investment.quantity != null ? (
+                  <div className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">Quantity</span>
+                    <span className="tabular-nums text-foreground">
+                      {investment.quantity}
                     </span>
                   </div>
+                ) : null}
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted-foreground">Purchased</span>
+                  <span className="text-foreground">
+                    {formatPurchaseDate(investment.purchaseDate)}
+                  </span>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <InvestmentFormDialog
+        key={editing?.id ?? `new-investment-${formNonce}`}
+        open={formOpen}
+        investment={editing}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setEditing(null);
+        }}
+        onSubmit={handleSubmit}
+      />
+
+      <ConfirmDialog
+        open={removing !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoving(null);
+        }}
+        title="Remove this preview holding?"
+        description="It will disappear from this page only. Nothing is stored on the server."
+        confirmLabel="Remove"
+        onConfirm={() => {
+          if (removing) {
+            setHoldings((current) =>
+              current.filter((item) => item.id !== removing.id),
+            );
+          }
+          setRemoving(null);
+        }}
+      />
     </div>
   );
 }

@@ -22,4 +22,7 @@ export const queryKeys = {
     summary: (from: string, to: string) =>
       ["dashboard", "summary", { from, to }] as const,
   },
+  user: {
+    profile: ["user", "profile"] as const,
+  },
 };
