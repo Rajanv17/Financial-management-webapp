@@ -26,6 +26,7 @@ import {
   updateBudget,
   archiveBudget,
 } from "./budget.controller";
+import { fetchDashboardSummary } from "./dashboard.controller";
 
 export {
   registerUser,
@@ -48,4 +49,5 @@ export {
   fetchBudgets,
   updateBudget,
   archiveBudget,
+  fetchDashboardSummary,
 };

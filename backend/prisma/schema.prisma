@@ -103,6 +103,8 @@ model Budget {
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
+  // Partial unique index in migration 20261018123000_budgets_active_unique:
+  // (user_id, category_id, month, year) WHERE is_archived = false.
   @@index([userId, year, month])
   @@map("budgets")
 }

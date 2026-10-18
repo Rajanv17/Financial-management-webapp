@@ -26,102 +26,41 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Search, Tags } from "lucide-react";
-// import { useToast } from "@/hooks/use-toast";
+import type { Category } from "@/features/categories/types";
 
-interface Category {
-  id: string;
-  name: string;
-  type: "income" | "expense";
-  userId?: string;
-  isDefault: boolean;
-  icon?: string;
-  color?: string;
-  isArchived?: boolean;
-  archivedAt?: Date;
-  createdAt: Date;
-}
+const now = "2026-01-01T00:00:00.000Z";
+
+const mockCategory = (
+  id: string,
+  name: string,
+  type: Category["type"],
+  color: string,
+  isDefault: boolean,
+): Category => ({
+  id,
+  name,
+  type,
+  color,
+  isDefault,
+  userId: isDefault ? null : "00000000-0000-0000-0000-000000000001",
+  icon: null,
+  isArchived: false,
+  archivedAt: null,
+  createdAt: now,
+  updatedAt: now,
+});
 
 const defaultCategories: Category[] = [
-  {
-    id: "1",
-    name: "Food & Dining",
-    type: "expense",
-    color: "#F97316",
-    isDefault: true,
-    createdAt: new Date(),
-  },
-  {
-    id: "2",
-    name: "Transportation",
-    type: "expense",
-    color: "#3B82F6",
-    isDefault: true,
-    createdAt: new Date(),
-  },
-  {
-    id: "3",
-    name: "Shopping",
-    type: "expense",
-    color: "#EC4899",
-    isDefault: true,
-    createdAt: new Date(),
-  },
-  {
-    id: "4",
-    name: "Entertainment",
-    type: "expense",
-    color: "#A855F7",
-    isDefault: true,
-    createdAt: new Date(),
-  },
-  {
-    id: "5",
-    name: "Bills & Utilities",
-    type: "expense",
-    color: "#EF4444",
-    isDefault: true,
-    createdAt: new Date(),
-  },
-  {
-    id: "6",
-    name: "Healthcare",
-    type: "expense",
-    color: "#14B8A6",
-    isDefault: true,
-    createdAt: new Date(),
-  },
-  {
-    id: "7",
-    name: "Salary",
-    type: "income",
-    color: "#22C55E",
-    isDefault: true,
-    createdAt: new Date(),
-  },
-  {
-    id: "8",
-    name: "Freelance",
-    type: "income",
-    color: "#06B6D4",
-    isDefault: true,
-    createdAt: new Date(),
-  },
-  {
-    id: "9",
-    name: "Investments",
-    type: "income",
-    color: "#6366F1",
-    isDefault: true,
-    createdAt: new Date(),
-  },
-  {
-    id: "10",
-    name: "Gifts",
-    type: "income",
-    color: "#F59E0B",
-    isDefault: false,
-    createdAt: new Date(),
-  },
+  mockCategory("1", "Food & Dining", "expense", "#F97316", true),
+  mockCategory("2", "Transportation", "expense", "#3B82F6", true),
+  mockCategory("3", "Shopping", "expense", "#EC4899", true),
+  mockCategory("4", "Entertainment", "expense", "#A855F7", true),
+  mockCategory("5", "Bills & Utilities", "expense", "#EF4444", true),
+  mockCategory("6", "Healthcare", "expense", "#14B8A6", true),
+  mockCategory("7", "Salary", "income", "#22C55E", true),
+  mockCategory("8", "Freelance", "income", "#06B6D4", true),
+  mockCategory("9", "Investments", "income", "#6366F1", true),
+  mockCategory("10", "Gifts", "income", "#F59E0B", false),
 ];
 
 interface CategorySectionProps {

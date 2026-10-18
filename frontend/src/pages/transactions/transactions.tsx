@@ -1,212 +1,468 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Search, Plus, Filter } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { toast } from "sonner";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { AddTransactionModal } from "@/components/modals/add-transaction-modal";
-import { columns } from "./transactions-columns";
-import { DataTable } from "./data-table";
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  Money,
+  PageHeader,
+  StatusBadge,
+  TableSkeleton,
+} from "@/components/shared";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { fetchCategories } from "@/features/categories/api";
+import type { Category } from "@/features/categories/types";
+import {
+  createTransaction,
+  deleteTransaction,
+  fetchTransactions,
+  updateTransaction,
+  type TransactionListParams,
+} from "@/features/transactions/api";
+import {
+  PAYMENT_METHOD_LABELS,
+  type Transaction,
+  type TransactionWritePayload,
+} from "@/features/transactions/types";
+import { ApiClientError } from "@/lib/api";
+import { queryKeys } from "@/lib/query-keys";
+import { DataTable } from "./data-table";
+import { TransactionFormDialog } from "./transaction-form-dialog";
+import { createTransactionColumns } from "./transactions-columns";
 
-export type Transaction = {
-  id: string;
-  title: string;
-  type: "income" | "expense";
-  amount: number;
-  method: string;
-  date: string;
-};
+const PAGE_SIZE = 20;
 
-// Mock Data
+const formatDate = (iso: string) =>
+  new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(iso));
 
-// const categoryColors: Record<string, string> = {
-//   Food: "bg-orange-100 text-orange-700",
-//   Salary: "bg-green-100 text-green-700",
-//   Entertainment: "bg-purple-100 text-purple-700",
-//   Transport: "bg-blue-100 text-blue-700",
-//   Shopping: "bg-yellow-100 text-yellow-700",
-// };
-
-async function getData(): Promise<Transaction[]> {
-  // Fetch data from your API here.
-  return [
-    {
-      id: "1",
-      amount: 100,
-      title: "Grocery Shopping",
-      type: "expense",
-      method: "Credit Card",
-      date: "Jan 2, 2024",
-    },
-    {
-      id: "2",
-      amount: 50000,
-      title: "Monthly Salary",
-      type: "income",
-      method: "Bank",
-      date: "Apr 1, 2023",
-    },
-    {
-      id: "3",
-      amount: 1050,
-      title: "Movie tickets",
-      type: "expense",
-      method: "Credit Card",
-      date: "Dec 12, 2025",
-    },
-    {
-      id: "4",
-      amount: 25000,
-      title: "Freelance Project",
-      type: "income",
-      method: "PayPal",
-      date: "Mar 15, 2024",
-    },
-    {
-      id: "5",
-      amount: 300,
-      title: "Dinner at Restaurant",
-      type: "expense",
-      method: "UPI",
-      date: "Feb 20, 2024",
-    },
-    {
-      id: "6",
-      amount: 1500,
-      title: "Sold old furniture",
-      type: "income",
-      method: "Cash",
-      date: "Jan 10, 2024",
-    },
-    {
-      id: "7",
-      amount: 200,
-      title: "Public Transport",
-      type: "expense",
-      method: "Cash",
-      date: "Aug 5, 2024",
-    },
-  ];
-}
+const groupedCategories = (categories: Category[]) => ({
+  expense: categories.filter((category) => category.type === "expense"),
+  income: categories.filter((category) => category.type === "income"),
+});
 
 export default function TransactionsPage() {
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [data, setData] = useState<Transaction[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "income" | "expense">(
-    "all",
-  );
-
-  // const filteredTransactions = data.filter((transaction) => {
-  //   const matchesSearch = transaction.title
-  //     .toLowerCase()
-  //     .includes(searchQuery.toLowerCase());
-  //   const matchesType = filterType === "all" || transaction.type === filterType;
-  //   return matchesSearch && matchesType;
-  // });
-
-  // const expenseTransactions = filteredTransactions.filter(
-  //   (t) => t.type === "expense"
-  // );
-  // const incomeTransactions = filteredTransactions.filter(
-  //   (t) => t.type === "income"
-  // );
+  const queryClient = useQueryClient();
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [type, setType] = useState<"all" | "income" | "expense">("all");
+  const [categoryId, setCategoryId] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [page, setPage] = useState(1);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Transaction | null>(null);
+  const [deleting, setDeleting] = useState<Transaction | null>(null);
 
   useEffect(() => {
-    getData().then(setData);
-  }, []);
+    const timer = window.setTimeout(() => {
+      setDebouncedQ(searchInput.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
+  const filtersActive =
+    debouncedQ !== "" || type !== "all" || categoryId !== "all" || from !== "" || to !== "";
+
+  const listParams: TransactionListParams = {
+    page,
+    limit: PAGE_SIZE,
+    ...(type !== "all" ? { type } : {}),
+    ...(categoryId !== "all" ? { categoryId } : {}),
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+    ...(debouncedQ ? { q: debouncedQ } : {}),
+    sortBy: "date",
+    sortOrder: "desc",
+  };
+
+  const transactionsQuery = useQuery({
+    queryKey: queryKeys.transactions.list(listParams),
+    queryFn: () => fetchTransactions(listParams),
+  });
+
+  const categoriesQuery = useQuery({
+    queryKey: queryKeys.categories.list(false),
+    queryFn: () => fetchCategories(false),
+  });
+
+  const categories = categoriesQuery.data ?? [];
+  const grouped = groupedCategories(
+    type === "all" ? categories : categories.filter((category) => category.type === type),
+  );
+
+  const invalidateRelated = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+    ]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (payload: TransactionWritePayload) => {
+      if (editing) {
+        return updateTransaction(editing.id, payload);
+      }
+      return createTransaction(payload);
+    },
+    onSuccess: async () => {
+      await invalidateRelated();
+      toast.success(editing ? "Transaction updated" : "Transaction added");
+      setFormOpen(false);
+      setEditing(null);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => deleteTransaction(id),
+    onSuccess: async () => {
+      await invalidateRelated();
+      toast.success("Transaction deleted");
+      setDeleting(null);
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof ApiClientError
+          ? error.message
+          : "Could not delete the transaction.",
+      );
+    },
+  });
+
+  const columns = useMemo(
+    () =>
+      createTransactionColumns({
+        onEdit: (transaction) => {
+          setEditing(transaction);
+          setFormOpen(true);
+        },
+        onDelete: setDeleting,
+      }),
+    [],
+  );
+
+  const clearFilters = () => {
+    setSearchInput("");
+    setDebouncedQ("");
+    setType("all");
+    setCategoryId("all");
+    setFrom("");
+    setTo("");
+    setPage(1);
+  };
+
+  const items = transactionsQuery.data?.items ?? [];
+  const pagination = transactionsQuery.data?.pagination;
+  const isEmpty = !filtersActive && pagination?.total === 0;
+  const isNoResults = filtersActive && pagination?.total === 0;
 
   return (
-    <div className="space-y-6 text-foreground">
-      <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
-          <p className="text-muted-foreground pt-2">
-            Manage your income and expenses.
-          </p>
-        </div>
-        <Button
-          onClick={() => setIsAddModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Transaction
-        </Button>
-      </div>
-
-      <AddTransactionModal
-        open={isAddModalOpen}
-        onOpenChange={setIsAddModalOpen}
+    <div className="space-y-6">
+      <PageHeader
+        title="Transactions"
+        description="View and manage your income and expenses."
+        action={
+          <Button
+            type="button"
+            onClick={() => {
+              setEditing(null);
+              setFormOpen(true);
+            }}
+          >
+            <Plus />
+            Add Transaction
+          </Button>
+        }
       />
 
-      {/* Search and Filter */}
-      <Card className="border-none bg-white shadow-md">
-        <CardContent>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center">
-            <div className="relative flex-1 shadow-sm rounded-md">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search transactions..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            <Select
-              value={filterType}
-              onValueChange={(v) => setFilterType(v as typeof filterType)}
-            >
-              <SelectTrigger className="w-full sm:w-30 h-9">
-                <SelectValue placeholder="All types" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="expense">Expense</SelectItem>
-                <SelectItem value="income">Income</SelectItem>
-              </SelectContent>
-            </Select>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full md:w-auto shadow-sm"
-                >
-                  <Filter className="h-4 w-4" />
-                  Filter
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent>
-                <DropdownMenuItem>All Transactions</DropdownMenuItem>
-                <DropdownMenuItem>Date</DropdownMenuItem>
-                <DropdownMenuItem>Amount</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Transaction List */}
-      <div className="space-y-3">
-        <Card className="border-none bg-white shadow-md">
-          <CardContent>
-            <div className="space-y-3">
-              <DataTable columns={columns} data={data} />
-            </div>
-          </CardContent>
-        </Card>
+      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
+        <div className="relative min-w-0 flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
+            placeholder="Search transactions"
+            className="pl-9"
+            aria-label="Search transactions"
+          />
+        </div>
+        <Tabs
+          value={type}
+          onValueChange={(value) => {
+            setType(value as typeof type);
+            setCategoryId("all");
+            setPage(1);
+          }}
+        >
+          <TabsList>
+            <TabsTrigger value="all">All</TabsTrigger>
+            <TabsTrigger value="income">Income</TabsTrigger>
+            <TabsTrigger value="expense">Expense</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        <Select
+          value={categoryId}
+          onValueChange={(value) => {
+            setCategoryId(value);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-full lg:w-56" aria-label="Category">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {grouped.expense.length > 0 ? (
+              <SelectGroup>
+                <SelectLabel>Expense</SelectLabel>
+                {grouped.expense.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ) : null}
+            {grouped.income.length > 0 ? (
+              <SelectGroup>
+                <SelectLabel>Income</SelectLabel>
+                {grouped.income.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ) : null}
+          </SelectContent>
+        </Select>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="from-date" className="text-xs text-muted-foreground">
+            From
+          </Label>
+          <Input
+            id="from-date"
+            type="date"
+            value={from}
+            onChange={(event) => {
+              setFrom(event.target.value);
+              setPage(1);
+            }}
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor="to-date" className="text-xs text-muted-foreground">
+            To
+          </Label>
+          <Input
+            id="to-date"
+            type="date"
+            value={to}
+            onChange={(event) => {
+              setTo(event.target.value);
+              setPage(1);
+            }}
+          />
+        </div>
+        {filtersActive ? (
+          <Button type="button" variant="outline" onClick={clearFilters}>
+            Clear filters
+          </Button>
+        ) : null}
       </div>
+
+      {transactionsQuery.isLoading ? <TableSkeleton /> : null}
+
+      {transactionsQuery.isError ? (
+        <ErrorState
+          message={
+            transactionsQuery.error instanceof ApiClientError
+              ? transactionsQuery.error.message
+              : "Could not load transactions."
+          }
+          onRetry={() => void transactionsQuery.refetch()}
+        />
+      ) : null}
+
+      {transactionsQuery.isSuccess && isEmpty ? (
+        <EmptyState
+          title="No transactions yet"
+          description="Add your first transaction"
+          action={
+            <Button
+              type="button"
+              onClick={() => {
+                setEditing(null);
+                setFormOpen(true);
+              }}
+            >
+              <Plus />
+              Add Transaction
+            </Button>
+          }
+        />
+      ) : null}
+
+      {transactionsQuery.isSuccess && isNoResults ? (
+        <EmptyState
+          title="No matching transactions"
+          description="Try adjusting your filters to see more results."
+          action={
+            <Button type="button" variant="outline" onClick={clearFilters}>
+              Clear filters
+            </Button>
+          }
+        />
+      ) : null}
+
+      {transactionsQuery.isSuccess && items.length > 0 ? (
+        <>
+          <div className="space-y-3 md:hidden">
+            {items.map((transaction) => (
+              <article
+                key={transaction.id}
+                className="space-y-3 rounded-xl border border-border bg-card p-4"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground">{transaction.title}</p>
+                    {transaction.description ? (
+                      <p className="text-sm text-muted-foreground">
+                        {transaction.description}
+                      </p>
+                    ) : null}
+                  </div>
+                  <Money amount={transaction.amount} type={transaction.type} />
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                  <span className="tabular-nums">{formatDate(transaction.date)}</span>
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className="size-2.5 rounded-full bg-muted-foreground"
+                      style={
+                        transaction.category?.color
+                          ? { backgroundColor: transaction.category.color }
+                          : undefined
+                      }
+                    />
+                    {transaction.category?.name ?? "—"}
+                  </span>
+                  <span>
+                    {transaction.paymentMethod
+                      ? PAYMENT_METHOD_LABELS[transaction.paymentMethod]
+                      : "—"}
+                  </span>
+                  <StatusBadge
+                    label={transaction.type === "income" ? "Income" : "Expense"}
+                    tone={transaction.type}
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditing(transaction);
+                      setFormOpen(true);
+                    }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeleting(transaction)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="hidden md:block">
+            <DataTable columns={columns} data={items} />
+          </div>
+
+          {pagination && pagination.totalPages > 1 ? (
+            <div className="flex items-center justify-between text-sm text-muted-foreground">
+              <p>
+                Page {pagination.page} of {pagination.totalPages}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page <= 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                >
+                  <ChevronLeft />
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={pagination.page >= pagination.totalPages}
+                  onClick={() => setPage((current) => current + 1)}
+                >
+                  Next
+                  <ChevronRight />
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      <TransactionFormDialog
+        key={formOpen ? (editing?.id ?? "new") : "closed"}
+        open={formOpen}
+        transaction={editing}
+        categories={categories}
+        pending={saveMutation.isPending}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setEditing(null);
+        }}
+        onSubmit={async (payload) => {
+          await saveMutation.mutateAsync(payload);
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!deleting}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+        title="Delete transaction"
+        description="This transaction will be permanently deleted."
+        pending={deleteMutation.isPending}
+        onConfirm={async () => {
+          if (deleting) {
+            await deleteMutation.mutateAsync(deleting.id);
+          }
+        }}
+      />
     </div>
   );
 }

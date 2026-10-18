@@ -1,82 +1,120 @@
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowDownLeft, ArrowUpRight, Pencil, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Pencil, Trash2 } from "lucide-react";
+import { Money } from "@/components/shared/money";
+import { StatusBadge } from "@/components/shared/status-badge";
+import { Button } from "@/components/ui/button";
+import {
+  PAYMENT_METHOD_LABELS,
+  type Transaction,
+} from "@/features/transactions/types";
 
-export type Transaction = {
-  id: string;
-  title: string;
-  type: "income" | "expense";
-  amount: number;
-  method: string;
-  date: string;
+const formatDate = (iso: string) =>
+  new Intl.DateTimeFormat("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(iso));
+
+type ColumnActions = {
+  onEdit: (transaction: Transaction) => void;
+  onDelete: (transaction: Transaction) => void;
 };
 
-export const columns: ColumnDef<Transaction>[] = [
+export const createTransactionColumns = ({
+  onEdit,
+  onDelete,
+}: ColumnActions): ColumnDef<Transaction>[] => [
+  {
+    accessorKey: "date",
+    header: "Date",
+    cell: ({ row }) => (
+      <span className="tabular-nums text-foreground">
+        {formatDate(row.original.date)}
+      </span>
+    ),
+  },
   {
     accessorKey: "title",
-    header: "Transaction",
+    header: "Title",
     cell: ({ row }) => (
-      <div>
-        <p className="font-medium">{row.original.title}</p>
+      <div className="min-w-0">
+        <p className="font-medium text-foreground">{row.original.title}</p>
+        {row.original.description ? (
+          <p className="truncate text-sm text-muted-foreground">
+            {row.original.description}
+          </p>
+        ) : null}
       </div>
     ),
   },
   {
-    accessorKey: "type",
-    header: "Type",
+    id: "category",
+    header: "Category",
     cell: ({ row }) => {
-      const type = row.original.type;
+      const category = row.original.category;
       return (
         <div className="flex items-center gap-2">
           <span
-            className={cn(
-              "flex h-8 w-8 items-center justify-center rounded-full",
-              type === "income"
-                ? "bg-green-500/10 text-green-500"
-                : "bg-red-500/10 text-red-500"
-            )}
-          >
-            {type === "income" ? (
-              <ArrowDownLeft className="h-4 w-4" />
-            ) : (
-              <ArrowUpRight className="h-4 w-4" />
-            )}
-          </span>
-          <span className="capitalize">{type}</span>
+            className="size-2.5 shrink-0 rounded-full bg-muted-foreground"
+            style={
+              category?.color ? { backgroundColor: category.color } : undefined
+            }
+          />
+          <span>{category?.name ?? "—"}</span>
         </div>
       );
     },
   },
   {
-    accessorKey: "amount",
-    header: "Amount",
+    accessorKey: "paymentMethod",
+    header: "Method",
+    cell: ({ row }) =>
+      row.original.paymentMethod
+        ? PAYMENT_METHOD_LABELS[row.original.paymentMethod]
+        : "—",
+  },
+  {
+    accessorKey: "type",
+    header: "Type",
     cell: ({ row }) => (
-      <span
-        className={cn(
-          "font-semibold",
-          row.original.type === "income" ? "text-green-500" : "text-red-500"
-        )}
-      >
-        {row.original.type === "income" ? "+" : "-"}₹
-        {Math.abs(row.original.amount).toFixed(2)}
-      </span>
+      <StatusBadge
+        label={row.original.type === "income" ? "Income" : "Expense"}
+        tone={row.original.type}
+      />
     ),
   },
   {
-    accessorKey: "method",
-    header: "Method",
-  },
-  {
-    accessorKey: "date",
-    header: "Date",
+    accessorKey: "amount",
+    header: () => <div className="text-right">Amount</div>,
+    cell: ({ row }) => (
+      <div className="text-right">
+        <Money amount={row.original.amount} type={row.original.type} />
+      </div>
+    ),
   },
   {
     id: "actions",
     header: "Actions",
-    cell: () => (
-      <div className="flex gap-4">
-        <Pencil className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
-        <Trash2 className="h-4 w-4 text-muted-foreground cursor-pointer hover:text-foreground" />
+    cell: ({ row }) => (
+      <div className="flex justify-end gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Edit transaction"
+          onClick={() => onEdit(row.original)}
+        >
+          <Pencil />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Delete transaction"
+          onClick={() => onDelete(row.original)}
+        >
+          <Trash2 />
+        </Button>
       </div>
     ),
   },

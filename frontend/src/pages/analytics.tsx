@@ -87,7 +87,7 @@ export default function AnalyticsPage() {
 
         <TabsContent value="overview" className="space-y-6 mt-6">
           {/* Financial Trend Chart */}
-          <Card className="border-none bg-white shadow-md">
+          <Card className="border-none shadow-md">
             <CardHeader>
               <CardTitle className="text-xl font-bold">
                 Financial Trend
@@ -135,7 +135,7 @@ export default function AnalyticsPage() {
 
           <div className="grid gap-6 md:grid-cols-2">
             {/* Spending by Category */}
-            <Card className="border-none bg-white shadow-md">
+            <Card className="border-none shadow-md">
               <CardHeader>
                 <CardTitle className="text-xl font-bold">
                   Spending by Category
@@ -168,7 +168,7 @@ export default function AnalyticsPage() {
             </Card>
 
             {/* Weekly Spending */}
-            <Card className="border-none bg-white shadow-md">
+            <Card className="border-none shadow-md">
               <CardHeader>
                 <CardTitle className="text-xl font-bold">
                   Weekly Spending
@@ -193,7 +193,7 @@ export default function AnalyticsPage() {
         </TabsContent>
 
         <TabsContent value="expenses" className="space-y-6 mt-6">
-          <Card className="border-none bg-white shadow-sm">
+          <Card className="border-none shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl font-bold">
                 Expense Categories
@@ -225,7 +225,7 @@ export default function AnalyticsPage() {
         </TabsContent>
 
         <TabsContent value="income" className="space-y-6 mt-6">
-          <Card className="border-none bg-white shadow-sm">
+          <Card className="border-none shadow-sm">
             <CardHeader>
               <CardTitle className="text-xl font-bold">
                 Income Sources
