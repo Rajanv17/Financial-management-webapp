@@ -3,6 +3,7 @@ import { prisma } from "../config";
 import {
   ApiError,
   ApiResponse,
+  optionalQueryString,
   optionalString,
   parseEnum,
   requireId,
@@ -50,13 +51,27 @@ const createCategory = async (req: AuthenticatedRequest, res: Response) => {
 
 const fetchCategories = async (req: AuthenticatedRequest, res: Response) => {
   const userId = requireUserId(req);
+  const archivedValue = optionalQueryString(req.query.archived, "archived");
 
-  const categories = await prisma.category.findMany({
-    where: {
-      OR: [{ isDefault: true }, { userId }],
-      isArchived: false,
-    },
-  });
+  if (
+    archivedValue !== undefined &&
+    archivedValue !== "true" &&
+    archivedValue !== "false"
+  ) {
+    throw new ApiError(400, "archived must be true or false");
+  }
+
+  const categories =
+    archivedValue === "true"
+      ? await prisma.category.findMany({
+          where: { userId, isArchived: true, isDefault: false },
+        })
+      : await prisma.category.findMany({
+          where: {
+            OR: [{ isDefault: true }, { userId }],
+            isArchived: false,
+          },
+        });
 
   return res
     .status(200)

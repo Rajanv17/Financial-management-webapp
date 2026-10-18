@@ -67,7 +67,7 @@ export default function RecurringPage() {
       <AddPaymentModal open={isAddModalOpen} onOpenChange={setIsAddModalOpen} />
 
       {/* Total Summary */}
-      <Card className="border-none bg-white shadow-md">
+      <Card className="border-none shadow-md">
         <CardContent className="p-6">
           <div className="text-center">
             <p className="text-4xl font-bold">₹{totalMonthly.toFixed(2)}</p>
@@ -84,7 +84,7 @@ export default function RecurringPage() {
         {recurringPayments.map((payment) => (
           <Card
             key={payment.id}
-            className="border-none bg-white shadow-md hover:shadow-lg transition-shadow"
+            className="border-none shadow-md hover:shadow-lg transition-shadow"
           >
             <CardHeader>
               <div className="flex items-start justify-between">

@@ -94,13 +94,13 @@ export default function OverviewPage() {
       {/* Summary Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {summaryData.map((item) => (
-          <Card key={item.title} className="border-none bg-white shadow-md">
+          <Card key={item.title} className="border-none shadow-md">
             <CardHeader className="pb-0">
               <div className="flex items-center justify-between ">
                 <CardTitle className="text-lg font-medium text-muted-foreground">
                   {item.title}
                 </CardTitle>
-                <item.icon className="h-10 w-10 text-blue-800 border-border rounded-md p-2 bg-blue-200" />
+                <item.icon className="h-10 w-10 text-primary rounded-md p-2 bg-primary/10" />
               </div>
             </CardHeader>
             <CardContent>
@@ -122,7 +122,7 @@ export default function OverviewPage() {
       {/* Charts Section */}
       <div className="grid gap-6 md:grid-cols-2">
         {/* Spending by Category */}
-        <Card className="border-none bg-white shadow-md">
+        <Card className="border-none shadow-md">
           <CardHeader>
             <CardTitle className="text-xl font-bold">
               Spending by Category
@@ -155,7 +155,7 @@ export default function OverviewPage() {
         </Card>
 
         {/* Income vs Expense */}
-        <Card className="border-none bg-white shadow-md">
+        <Card className="border-none shadow-md">
           <CardHeader>
             <CardTitle className="text-xl font-bold">
               Income vs Expense
@@ -178,7 +178,7 @@ export default function OverviewPage() {
         </Card>
 
         {/* Recent Transactions */}
-        <Card className="bg-white shadow-md border-none">
+        <Card className="shadow-md border-none">
           <CardHeader>
             <CardTitle className="text-xl font-bold">
               Recent Transactions
@@ -236,7 +236,7 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-none bg-white shadow-md">
+        <Card className="border-none shadow-md">
           <CardHeader>
             <CardTitle className="text-xl font-bold">Upcoming Bills</CardTitle>
             <p className="text-sm text-muted-foreground">

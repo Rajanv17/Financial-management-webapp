@@ -2,19 +2,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Edit2, Trash2 } from "lucide-react";
-
-interface Category {
-  id: string;
-  name: string;
-  type: "income" | "expense";
-  userId?: string;
-  isDefault: boolean;
-  icon?: string;
-  color?: string;
-  isArchived?: boolean;
-  archivedAt?: Date;
-  createdAt: Date;
-}
+import type { Category } from "@/features/categories/types";
 
 interface CategoryCardProps {
   category: Category;
@@ -39,12 +27,20 @@ export function CategoryCard({
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div
-              className="h-10 w-10 rounded-lg flex items-center justify-center shrink-0"
-              style={{ backgroundColor: category.color + "20" }}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted"
+              style={
+                category.color
+                  ? { backgroundColor: `${category.color}20` }
+                  : undefined
+              }
             >
               <div
-                className="h-4 w-4 rounded-full"
-                style={{ backgroundColor: category.color }}
+                className="h-4 w-4 rounded-full bg-muted-foreground"
+                style={
+                  category.color
+                    ? { backgroundColor: category.color }
+                    : undefined
+                }
               />
             </div>
             <div className="min-w-0 flex-1">

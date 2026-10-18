@@ -101,3 +101,42 @@ export const parseIntInRange = (
   }
   return n;
 };
+
+export const optionalQueryString = (
+  value: unknown,
+  field: string,
+): string | undefined => {
+  if (value === undefined || value === "") return undefined;
+  if (typeof value !== "string") {
+    throw new ApiError(400, `${field} is invalid`);
+  }
+  return value;
+};
+
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** Inclusive bound. Date-only values cover the whole UTC day. */
+export const parseInclusiveDate = (
+  value: unknown,
+  field: string,
+  bound: "start" | "end",
+): Date => {
+  if (typeof value === "string" && DATE_ONLY.test(value)) {
+    const match = value.match(DATE_ONLY);
+    const year = Number(match?.[1]);
+    const month = Number(match?.[2]);
+    const day = Number(match?.[3]);
+    const parsed = new Date(Date.UTC(year, month - 1, day));
+    if (
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() !== month - 1 ||
+      parsed.getUTCDate() !== day
+    ) {
+      throw new ApiError(400, `${field} is invalid`);
+    }
+    return bound === "start"
+      ? parsed
+      : new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+  }
+  return parseDate(value, field);
+};

@@ -1,11 +1,14 @@
 import { Outlet, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { useAuth } from "@/features/auth/auth-provider";
+import { userInitials } from "@/lib/format";
 import {
   SidebarInset,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "./sidebar";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChevronDown, UserIcon, LogOutIcon } from "lucide-react";
 import {
   DropdownMenu,
@@ -19,24 +22,25 @@ import { ThemeToggle } from "../theme-toggle";
 
 export function DashboardLayout() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const initials = userInitials(user?.username ?? "");
 
   return (
     <SidebarProvider>
       <AppSidebar />
 
       <SidebarInset>
-        <div className="flex min-h-svh flex-col bg-gray-50">
-          <header className="flex h-14 items-center gap-3 border-b border-gray-200 px-6 bg-white dark:bg-gray-900">
-            <SidebarTrigger className="text-black transition-[width] duration-200 dark:text-white" />
+        <div className="flex min-h-svh flex-col bg-background">
+          <header className="flex h-14 items-center gap-3 border-b border-border px-6 bg-card">
+            <SidebarTrigger className="text-foreground transition-[width] duration-200" />
             <div className="ml-auto flex items-center gap-2">
               <ThemeToggle />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1 px-2 py-1 text-sm transition cursor-pointer hover:bg-gray-100 rounded-lg">
+                  <button className="flex items-center gap-1 px-2 py-1 text-sm transition cursor-pointer hover:bg-accent rounded-lg">
                     <Avatar className="size-8">
-                      <AvatarImage src="https://github.com/shadcn.png" />
-                      <AvatarFallback className="dark:text-white">
-                        RV
+                      <AvatarFallback className="bg-primary/10 text-xs text-primary">
+                        {initials}
                       </AvatarFallback>
                     </Avatar>
                     <ChevronDown className="h-4 w-4 text-muted-foreground" />
@@ -52,9 +56,12 @@ export function DashboardLayout() {
                     Profile
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onSelect={() => {
-                      // TODO: wire real logout
-                      navigate("/auth");
+                    onSelect={async () => {
+                      try {
+                        await logout();
+                      } catch {
+                        toast.error("Could not sign out. Try again.");
+                      }
                     }}
                   >
                     <LogOutIcon className="mr-2 h-4 w-4" />
@@ -65,7 +72,7 @@ export function DashboardLayout() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto p-6 dark:bg-gray-900">
+          <main className="flex-1 overflow-y-auto p-6">
             <Outlet />
           </main>
         </div>

@@ -52,6 +52,10 @@ const registerUser = async (req: Request, res: Response) => {
     throw new ApiError(400, "All fields are required");
   }
 
+  if (password.length < 8) {
+    throw new ApiError(400, "Password must be at least 8 characters");
+  }
+
   const passwordHash = await hashPassword(password);
 
   try {

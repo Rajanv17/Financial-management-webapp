@@ -8,8 +8,11 @@ import {
   parseEnum,
   parseDate,
   parseIntInRange,
+  optionalQueryString,
+  parseInclusiveDate,
 } from "./validate.util";
 import { serializeAmount } from "./serializers.util";
+import { budgetUsage } from "./budgetStatus.util";
 import {
   hashPassword,
   normalizeIdentifier,
@@ -28,7 +31,10 @@ export {
   parseEnum,
   parseDate,
   parseIntInRange,
+  optionalQueryString,
+  parseInclusiveDate,
   serializeAmount,
+  budgetUsage,
   hashPassword,
   normalizeIdentifier,
   generateAccessToken,

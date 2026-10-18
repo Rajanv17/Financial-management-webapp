@@ -27,7 +27,7 @@ export default function BudgetPage() {
 
       <AddBudgetModal open={isAddModalOpen} onOpenChange={setIsAddModalOpen} />
 
-      <Card className="border-none bg-white shadow-md">
+      <Card className="border-none shadow-md">
         <CardHeader>
           <CardTitle className="text-xl font-bold">Overall Budget</CardTitle>
         </CardHeader>
@@ -77,7 +77,7 @@ export default function BudgetPage() {
           const percentage = (budget.spent / budget.total) * 100;
           const isOver = budget.spent > budget.total;
           return (
-            <Card key={budget.name} className="border-none bg-white shadow-md">
+            <Card key={budget.name} className="border-none shadow-md">
               <CardHeader>
                 <CardTitle className={`text-xl font-bold ${budget.colorClass}`}>
                   {budget.name}

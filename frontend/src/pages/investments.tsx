@@ -83,7 +83,7 @@ export default function InvestmentsPage() {
 
       {/* Summary Cards */}
       <div className="grid gap-6 md:grid-cols-3">
-        <Card className="border-none bg-white shadow-md">
+        <Card className="border-none shadow-md">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg font-medium text-muted-foreground">
               Total Invested
@@ -95,7 +95,7 @@ export default function InvestmentsPage() {
             </p>
           </CardContent>
         </Card>
-        <Card className="border-none bg-white shadow-md">
+        <Card className="border-none shadow-md">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg font-medium text-muted-foreground">
               Current Value
@@ -105,7 +105,7 @@ export default function InvestmentsPage() {
             <p className="text-3xl font-bold">₹{totalValue.toLocaleString()}</p>
           </CardContent>
         </Card>
-        <Card className="border-none bg-white shadow-md">
+        <Card className="border-none shadow-md">
           <CardHeader className="pb-2">
             <CardTitle className="text-lg font-medium text-muted-foreground">
               Total Gain/Loss
@@ -124,7 +124,7 @@ export default function InvestmentsPage() {
         {investments.map((investment) => (
           <Card
             key={investment.id}
-            className="border-none bg-white shadow-sm hover:shadow-md transition-shadow"
+            className="border-none shadow-sm hover:shadow-md transition-shadow"
           >
             <CardHeader>
               <div className="flex items-start justify-between">

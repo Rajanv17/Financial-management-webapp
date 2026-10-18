@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { prisma } from "../config";
 import { AuthenticatedRequest } from "../middlewares";
-import { ApiError, ApiResponse } from "../utils";
+import { ApiError, ApiResponse, budgetUsage } from "../utils";
 import {
   parseAmount,
   parseIntInRange,
@@ -50,19 +50,29 @@ const createBudget = async (req: AuthenticatedRequest, res: Response) => {
     );
   }
 
-  const budget = await prisma.budget.create({
-    data: { userId, categoryId, amount, month, year },
-  });
+  try {
+    const budget = await prisma.budget.create({
+      data: { userId, categoryId, amount, month, year },
+    });
 
-  return res
-    .status(201)
-    .json(
-      new ApiResponse(
-        201,
-        serializeAmount(budget),
-        "Budget created successfully",
-      ),
-    );
+    return res
+      .status(201)
+      .json(
+        new ApiResponse(
+          201,
+          serializeAmount(budget),
+          "Budget created successfully",
+        ),
+      );
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      throw new ApiError(
+        400,
+        "Budget already exists for this category and month",
+      );
+    }
+    throw error;
+  }
 };
 
 const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
@@ -102,21 +112,14 @@ const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
   const budgetsWithStats = budgets.map((budget) => {
     const amount = Number(budget.amount);
     const spent = spentByCategory.get(budget.categoryId) ?? 0;
-    const rawPercent = (spent / amount) * 100;
-
-    const status: "under_limit" | "near_limit" | "exceeded" =
-      rawPercent >= 100
-        ? "exceeded"
-        : rawPercent >= 90
-          ? "near_limit"
-          : "under_limit";
+    const { percentageUsed, status, remaining } = budgetUsage(spent, amount);
 
     return {
       ...budget,
       amount,
       spent,
-      remaining: amount - spent,
-      percentageUsed: Math.min(Math.round(rawPercent), 100),
+      remaining,
+      percentageUsed,
       status,
     };
   });
