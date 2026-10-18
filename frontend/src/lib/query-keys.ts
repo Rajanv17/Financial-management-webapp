@@ -12,6 +12,10 @@ export const queryKeys = {
   },
   budgets: {
     all: ["budgets"] as const,
+    list: (month: number, year: number) =>
+      ["budgets", "list", { month, year }] as const,
+    summary: (month: number, year: number) =>
+      ["budgets", "summary", { month, year }] as const,
   },
   dashboard: {
     all: ["dashboard"] as const,

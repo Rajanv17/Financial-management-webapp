@@ -15,6 +15,7 @@ type ConfirmDialogProps = {
   title: string;
   description: string;
   confirmLabel?: string;
+  pendingLabel?: string;
   pending?: boolean;
   onConfirm: () => void | Promise<void>;
 };
@@ -25,6 +26,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Delete",
+  pendingLabel,
   pending = false,
   onConfirm,
 }: ConfirmDialogProps) {
@@ -45,7 +47,7 @@ export function ConfirmDialog({
               void onConfirm();
             }}
           >
-            {pending ? "Deleting…" : confirmLabel}
+            {pending ? (pendingLabel ?? "Deleting…") : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

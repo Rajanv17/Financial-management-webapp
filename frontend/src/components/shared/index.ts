@@ -1,5 +1,7 @@
 export { PageHeader } from "./page-header";
+export { StatCard } from "./stat-card";
 export { StatusBadge } from "./status-badge";
+export { BudgetProgress } from "./budget-progress";
 export { Money } from "./money";
 export { EmptyState } from "./empty-state";
 export { ErrorState } from "./error-state";
