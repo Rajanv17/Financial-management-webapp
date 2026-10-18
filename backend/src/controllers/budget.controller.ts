@@ -131,6 +131,66 @@ const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
     );
 };
 
+const fetchBudgetSummary = async (
+  req: AuthenticatedRequest,
+  res: Response,
+) => {
+  const userId = requireUserId(req);
+  const month = parseIntInRange(req.query.month, "Month", 1, 12);
+  const year = parseIntInRange(req.query.year, "Year", 2000, 2100);
+
+  const where = {
+    userId,
+    month,
+    year,
+    isActive: true,
+    isArchived: false,
+  };
+
+  const [budgetTotals, budgets] = await Promise.all([
+    prisma.budget.aggregate({
+      where,
+      _sum: { amount: true },
+    }),
+    prisma.budget.findMany({
+      where,
+      select: { categoryId: true },
+    }),
+  ]);
+
+  const totalBudget = Number(budgetTotals._sum.amount ?? 0);
+
+  const start = new Date(Date.UTC(year, month - 1, 1));
+  const end = new Date(Date.UTC(year, month, 1));
+
+  const spentTotals =
+    budgets.length === 0
+      ? { _sum: { amount: null } }
+      : await prisma.transaction.aggregate({
+          where: {
+            userId,
+            type: "expense",
+            date: { gte: start, lt: end },
+            categoryId: { in: budgets.map((budget) => budget.categoryId) },
+          },
+          _sum: { amount: true },
+        });
+
+  const totalSpent = Number(spentTotals._sum.amount ?? 0);
+  const { remaining, percentageUsed } =
+    totalBudget === 0
+      ? { remaining: 0, percentageUsed: 0 }
+      : budgetUsage(totalSpent, totalBudget);
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { totalBudget, totalSpent, remaining, percentageUsed },
+      "Budget summary fetched successfully",
+    ),
+  );
+};
+
 const updateBudget = async (req: AuthenticatedRequest, res: Response) => {
   const userId = requireUserId(req);
   const id = requireId(req.params.id, "Budget id");
@@ -196,4 +256,10 @@ const archiveBudget = async (req: AuthenticatedRequest, res: Response) => {
     );
 };
 
-export { createBudget, fetchBudgets, updateBudget, archiveBudget };
+export {
+  createBudget,
+  fetchBudgets,
+  fetchBudgetSummary,
+  updateBudget,
+  archiveBudget,
+};
