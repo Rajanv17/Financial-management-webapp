@@ -19,5 +19,7 @@ export const queryKeys = {
   },
   dashboard: {
     all: ["dashboard"] as const,
+    summary: (from: string, to: string) =>
+      ["dashboard", "summary", { from, to }] as const,
   },
 };
