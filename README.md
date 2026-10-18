@@ -2,7 +2,7 @@
 
 A full-stack personal financial application for tracking income and expenses, setting budgets, and understanding where your money goes, with a dashboard that turns raw transactions into clear visual insight.
 
-![CI](https://github.com/Rajanv17/Finance-Management-Webapp/actions/workflows/ci.yml/badge.svg)
+![CI](https://github.com/Rajanv17/Financial-management-webapp/actions/workflows/ci.yml/badge.svg)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 **Live demo:** _coming soon_
@@ -69,7 +69,7 @@ Financial-management-webapp/
 
 ### Prerequisites
 
-- Node.js 20.19 or later (CI runs on Node.js 24)
+- Node.js 20.19 or later (CI runs on Node.js 22)
 - npm
 - PostgreSQL 14 or later (local install, Docker, or a hosted instance)
 
@@ -149,7 +149,7 @@ Short notes on why things are built the way they are. This section grows as the 
 
 - **Branches:** `main` is protected and always deployable. New work happens on feature branches (for example `feat/budget-limits`) and merges through a pull request.
 - **Commits:** follow [Conventional Commits](https://www.conventionalcommits.org/), using `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, and `chore:`.
-- **CI:** every push and pull request to `main` runs two GitHub Actions jobs. The backend job starts a PostgreSQL service container, applies the Prisma migrations, then typechecks and builds the API. The frontend job lints and builds the app. A change merges only when both jobs pass.
+- **CI:** every pull request and every push to `main` runs two GitHub Actions jobs. The backend job starts a PostgreSQL 16 service container, typechecks, and runs tests against a separate `TEST_DATABASE_URL`. The frontend job lints (warnings do not fail the job) and builds with `VITE_API_URL=/api/v1`.
 - **Deploy:** not automated yet.
 
 ---
