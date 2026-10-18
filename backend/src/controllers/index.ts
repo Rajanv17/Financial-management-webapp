@@ -23,6 +23,7 @@ import {
 import {
   createBudget,
   fetchBudgets,
+  fetchBudgetSummary,
   updateBudget,
   archiveBudget,
 } from "./budget.controller";
@@ -47,6 +48,7 @@ export {
   restoreCategory,
   createBudget,
   fetchBudgets,
+  fetchBudgetSummary,
   updateBudget,
   archiveBudget,
   fetchDashboardSummary,
