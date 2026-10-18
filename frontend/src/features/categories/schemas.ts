@@ -17,8 +17,12 @@ export const categorySchema = z.object({
 });
 
 export const categoryFormSchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(50),
+  name: z
+    .string()
+    .trim()
+    .min(1, "Name is required")
+    .max(50, "Name must be 50 characters or fewer"),
   type: transactionTypeSchema,
-  icon: z.string().trim().max(50).optional(),
-  color: z.string().trim().max(9).optional(),
+  icon: z.string().trim().min(1, "Choose an icon").max(50),
+  color: z.string().trim().min(1, "Choose a colour").max(9),
 });
