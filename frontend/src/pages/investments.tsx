@@ -134,8 +134,8 @@ export default function InvestmentsPage() {
           {holdings.map((investment) => (
             <Card key={investment.id}>
               <CardHeader className="flex-row items-start justify-between gap-3">
-                <div className="space-y-2">
-                  <CardTitle className="text-lg">{investment.name}</CardTitle>
+                <div className="min-w-0 space-y-2">
+                  <CardTitle className="truncate text-lg">{investment.name}</CardTitle>
                   <StatusBadge label={INVESTMENT_TYPE_LABELS[investment.type]} />
                 </div>
                 <div className="flex gap-1">

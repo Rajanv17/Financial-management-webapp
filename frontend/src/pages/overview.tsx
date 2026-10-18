@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
@@ -10,19 +10,6 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
 import { AddBudgetModal } from "@/components/modals/add-budget-modal";
 import {
   BudgetProgress,
@@ -77,12 +64,17 @@ const CHART_FILLS = [
   "var(--chart-5)",
 ] as const;
 
-const axisAmount = new Intl.NumberFormat("en-IN", {
-  style: "currency",
-  currency: "INR",
-  notation: "compact",
-  maximumFractionDigits: 1,
-});
+const CashFlowChart = lazy(() =>
+  import("@/features/dashboard/overview-charts").then((mod) => ({
+    default: mod.CashFlowChart,
+  })),
+);
+
+const CategorySpendChart = lazy(() =>
+  import("@/features/dashboard/overview-charts").then((mod) => ({
+    default: mod.CategorySpendChart,
+  })),
+);
 
 const greetingForHour = (hour: number) => {
   if (hour < 12) return "Good morning";
@@ -123,43 +115,6 @@ const usePrefersReducedMotion = () => {
 
   return reduced;
 };
-
-type TooltipRow = {
-  name?: string;
-  value?: number;
-  color?: string;
-};
-
-function MoneyTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: TooltipRow[];
-  label?: string;
-}) {
-  if (!active || !payload?.length) return null;
-
-  return (
-    <div className="rounded-md border border-border bg-card px-3 py-2 text-sm shadow-sm">
-      {label ? <p className="mb-1 font-medium text-foreground">{label}</p> : null}
-      <ul className="space-y-1">
-        {payload.map((item) => (
-          <li
-            key={item.name}
-            className="flex items-center justify-between gap-4 tabular-nums text-muted-foreground"
-          >
-            <span>{item.name}</span>
-            <span className="text-foreground">
-              {typeof item.value === "number" ? formatINR(item.value) : "—"}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
 
 function StatCardSkeleton() {
   return (
@@ -302,7 +257,7 @@ export default function OverviewPage() {
                 value={period}
                 onValueChange={(value) => setPeriod(value as PeriodId)}
               >
-                <SelectTrigger id="overview-period" className="w-44">
+                <SelectTrigger id="overview-period" className="w-full sm:w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -468,70 +423,9 @@ export default function OverviewPage() {
                   />
                 ) : null}
                 {summary && hasCashFlow ? (
-                  <>
-                    <div className="h-72" aria-hidden="true">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={monthlyChart} barGap={4}>
-                          <CartesianGrid stroke="var(--border)" vertical={false} />
-                          <XAxis
-                            dataKey="label"
-                            tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
-                            tickLine={false}
-                            axisLine={{ stroke: "var(--border)" }}
-                          />
-                          <YAxis
-                            tickFormatter={(value: number) => axisAmount.format(value)}
-                            tick={{ fill: "var(--muted-foreground)", fontSize: 12 }}
-                            tickLine={false}
-                            axisLine={{ stroke: "var(--border)" }}
-                            width={64}
-                          />
-                          <Tooltip
-                            cursor={{ fill: "var(--muted)" }}
-                            content={<MoneyTooltip />}
-                          />
-                          <Legend
-                            formatter={(value) => (
-                              <span className="text-sm text-foreground">{value}</span>
-                            )}
-                          />
-                          <Bar
-                            dataKey="income"
-                            name="Income"
-                            fill="var(--success)"
-                            radius={[4, 4, 0, 0]}
-                            isAnimationActive={!reduceMotion}
-                          />
-                          <Bar
-                            dataKey="expense"
-                            name="Expense"
-                            fill="var(--danger)"
-                            radius={[4, 4, 0, 0]}
-                            isAnimationActive={!reduceMotion}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                    <table className="sr-only">
-                      <caption>Income versus expenses by month</caption>
-                      <thead>
-                        <tr>
-                          <th>Month</th>
-                          <th>Income</th>
-                          <th>Expense</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {monthlyChart.map((point) => (
-                          <tr key={point.month}>
-                            <td>{point.label}</td>
-                            <td>{formatINR(point.income)}</td>
-                            <td>{formatINR(point.expense)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </>
+                  <Suspense fallback={<PanelSkeleton rows={6} />}>
+                    <CashFlowChart data={monthlyChart} reduceMotion={reduceMotion} />
+                  </Suspense>
                 ) : null}
               </CardContent>
             </Card>
@@ -561,74 +455,13 @@ export default function OverviewPage() {
                   />
                 ) : null}
                 {summary && categoryChart.length > 0 ? (
-                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] md:items-center">
-                    <div className="relative h-64" aria-hidden="true">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={categoryChart}
-                            dataKey="total"
-                            nameKey="displayName"
-                            innerRadius={58}
-                            outerRadius={88}
-                            paddingAngle={2}
-                            isAnimationActive={!reduceMotion}
-                          >
-                            {categoryChart.map((entry) => (
-                              <Cell key={entry.categoryId} fill={entry.fill} />
-                            ))}
-                          </Pie>
-                          <Tooltip content={<MoneyTooltip />} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                        <p className="text-xs text-muted-foreground">Expenses</p>
-                        <p className="text-sm font-semibold tabular-nums text-foreground">
-                          {formatINR(summary.totals.expense)}
-                        </p>
-                      </div>
-                    </div>
-                    <ul className="space-y-2">
-                      {categoryChart.map((item) => (
-                        <li
-                          key={item.categoryId}
-                          className="flex items-center justify-between gap-3 text-sm"
-                        >
-                          <span className="flex min-w-0 items-center gap-2">
-                            <span
-                              className="size-2.5 shrink-0 rounded-full bg-chart-1"
-                              style={{ backgroundColor: item.fill }}
-                            />
-                            <span className="truncate text-foreground">
-                              {item.displayName}
-                            </span>
-                          </span>
-                          <span className="shrink-0 tabular-nums text-muted-foreground">
-                            {formatINR(item.total)} · {item.percent}%
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                    <table className="sr-only">
-                      <caption>Spending by category</caption>
-                      <thead>
-                        <tr>
-                          <th>Category</th>
-                          <th>Amount</th>
-                          <th>Percent</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {categoryChart.map((item) => (
-                          <tr key={item.categoryId}>
-                            <td>{item.displayName}</td>
-                            <td>{formatINR(item.total)}</td>
-                            <td>{item.percent}%</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <Suspense fallback={<PanelSkeleton rows={6} />}>
+                    <CategorySpendChart
+                      data={categoryChart}
+                      expenseTotal={summary.totals.expense}
+                      reduceMotion={reduceMotion}
+                    />
+                  </Suspense>
                 ) : null}
               </CardContent>
             </Card>

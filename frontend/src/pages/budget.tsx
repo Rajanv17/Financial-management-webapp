@@ -227,7 +227,7 @@ export default function BudgetPage() {
                   value={String(month)}
                   onValueChange={(value) => setMonth(Number(value))}
                 >
-                  <SelectTrigger id="budget-page-month" className="w-36">
+                  <SelectTrigger id="budget-page-month" className="w-full min-w-0 sm:w-36">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -247,7 +247,7 @@ export default function BudgetPage() {
                   value={String(year)}
                   onValueChange={(value) => setYear(Number(value))}
                 >
-                  <SelectTrigger id="budget-page-year" className="w-24">
+                  <SelectTrigger id="budget-page-year" className="w-full min-w-0 sm:w-24">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

@@ -1,73 +1,42 @@
-# React + TypeScript + Vite
+# Finance Manager frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Vite 7 + React 19 UI for recording INR income and expenses, monthly budgets, and categories. Auth uses httpOnly cookies; the browser never stores tokens.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+1. Start the API from `backend/` (see the repo root README). CORS must allow the Vite origin, usually `http://localhost:5173`.
+2. Copy the env file. `VITE_API_URL` must include `/api/v1` and match the API origin:
 
-## React Compiler
+   ```bash
+   cp .env.example .env
+   ```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+   Default:
 
-## Expanding the ESLint configuration
+   ```
+   VITE_API_URL=http://localhost:8000/api/v1
+   ```
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+3. Install and start the dev server:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+   ```bash
+   npm install
+   npm run dev
+   ```
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+   Open `http://localhost:5173`. Login is **username + password** (`POST /user/login`). Requests use `credentials: "include"`. Do not put tokens in `localStorage` or an `Authorization` header.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Scripts
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+| Command | What it does |
+|---|---|
+| `npm run dev` | Vite development server |
+| `npm run build` | Typecheck (`tsc -b`) and production bundle |
+| `npm run preview` | Serve the production build |
+| `npm run lint` | ESLint |
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Notes
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- Recurring, Investments, and Analytics have no backend yet. Those routes stay in the app, show a **Preview – not saved** badge, and do not persist.
+- Goals, Transfers, Reports, and Accounts are not in the nav until they exist.
+- This UI is built for readable contrast, visible focus, and keyboard use of dialogs. It has **not** been audited against WCAG and is **not** claimed to conform.

@@ -6,4 +6,5 @@ export { Money } from "./money";
 export { EmptyState } from "./empty-state";
 export { ErrorState } from "./error-state";
 export { TableSkeleton } from "./table-skeleton";
+export { PageRouteSkeleton } from "./page-route-skeleton";
 export { ConfirmDialog } from "./confirm-dialog";

@@ -209,6 +209,7 @@ export default function Categories() {
         <Tabs
           value={tab}
           onValueChange={(value) => setTab(value as CategoryTab)}
+          className="shrink-0"
         >
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>

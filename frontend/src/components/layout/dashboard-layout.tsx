@@ -8,6 +8,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AppSidebar } from "./sidebar";
+import { MobileBottomNav } from "./mobile-bottom-nav";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ChevronDown, UserIcon, LogOutIcon } from "lucide-react";
 import {
@@ -30,14 +31,17 @@ export function DashboardLayout() {
       <AppSidebar />
 
       <SidebarInset>
-        <div className="flex min-h-svh flex-col bg-background">
-          <header className="flex h-14 items-center gap-3 border-b border-border px-6 bg-card">
+        <div className="flex min-h-svh min-w-0 flex-col bg-background">
+          <header className="flex h-16 items-center gap-3 border-b border-border bg-card px-4 md:px-6">
             <SidebarTrigger className="text-foreground transition-[width] duration-200" />
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex min-w-0 items-center gap-2">
               <ThemeToggle />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1 px-2 py-1 text-sm transition cursor-pointer hover:bg-accent rounded-lg">
+                  <button
+                    type="button"
+                    className="flex max-w-[40vw] cursor-pointer items-center gap-1 rounded-lg px-2 py-1 text-sm transition hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
+                  >
                     <Avatar className="size-8">
                       <AvatarFallback className="bg-primary/10 text-xs text-primary">
                         {initials}
@@ -72,9 +76,10 @@ export function DashboardLayout() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-y-auto p-6">
+          <main className="mx-auto w-full max-w-[1600px] min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-4 py-4 pb-24 md:px-5 md:py-5 md:pb-6 xl:px-7 xl:py-7">
             <Outlet />
           </main>
+          <MobileBottomNav />
         </div>
       </SidebarInset>
     </SidebarProvider>

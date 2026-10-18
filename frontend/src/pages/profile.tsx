@@ -105,15 +105,15 @@ export default function ProfilePage() {
       {profile ? (
         <Card className="mx-auto w-full max-w-xl">
           <CardContent className="space-y-8 p-6">
-            <div className="flex items-center gap-4">
+            <div className="flex min-w-0 items-center gap-4">
               <Avatar className="size-16">
                 <AvatarFallback className="bg-primary/10 text-lg text-primary">
                   {userInitials(profile.username)}
                 </AvatarFallback>
               </Avatar>
-              <div>
-                <p className="font-semibold">{profile.username}</p>
-                <p className="text-sm text-muted-foreground">{profile.email}</p>
+              <div className="min-w-0">
+                <p className="truncate font-semibold">{profile.username}</p>
+                <p className="truncate text-sm text-muted-foreground">{profile.email}</p>
                 <p className="text-sm text-muted-foreground">
                   Member since {formatJoined(profile.createdAt)}
                 </p>

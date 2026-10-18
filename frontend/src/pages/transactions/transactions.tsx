@@ -211,6 +211,7 @@ export default function TransactionsPage() {
             setCategoryId("all");
             setPage(1);
           }}
+          className="shrink-0"
         >
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
@@ -341,7 +342,7 @@ export default function TransactionsPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-medium text-foreground">{transaction.title}</p>
+                    <p className="truncate font-medium text-foreground">{transaction.title}</p>
                     {transaction.description ? (
                       <p className="text-sm text-muted-foreground">
                         {transaction.description}

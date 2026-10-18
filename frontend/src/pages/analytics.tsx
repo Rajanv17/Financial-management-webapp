@@ -127,8 +127,8 @@ export default function AnalyticsPage() {
                 Sample monthly series. Two lines are plotted, matching the legend.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="h-72" aria-hidden="true">
+            <CardContent className="min-w-0 space-y-4">
+              <div className="h-72 min-w-0" aria-hidden="true">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={SAMPLE_TREND}>
                     <CartesianGrid stroke="var(--border)" vertical={false} />
@@ -172,7 +172,8 @@ export default function AnalyticsPage() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto">
+              <table className="w-full min-w-[20rem] text-sm">
                 <caption className="sr-only">Sample income and expenses by month</caption>
                 <thead>
                   <tr className="border-b border-border text-left text-muted-foreground">
@@ -195,6 +196,7 @@ export default function AnalyticsPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -273,7 +275,7 @@ export default function AnalyticsPage() {
                       <YAxis
                         type="category"
                         dataKey="name"
-                        width={120}
+                        width={88}
                         tick={{ fill: "var(--muted-foreground)", fontSize: 11 }}
                         tickLine={false}
                         axisLine={{ stroke: "var(--border)" }}

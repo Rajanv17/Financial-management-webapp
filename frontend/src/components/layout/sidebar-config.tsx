@@ -6,7 +6,6 @@ import {
   TrendingUp,
   BarChart3,
   User,
-  LogOut,
   Tag,
 } from "lucide-react";
 
@@ -52,9 +51,3 @@ export const sidebarItems = [
     path: "/dashboard/profile",
   },
 ];
-
-export const logoutItem = {
-  label: "Logout",
-  icon: LogOut,
-  path: "/logout",
-};
