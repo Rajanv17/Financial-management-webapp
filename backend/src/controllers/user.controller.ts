@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import crypto from "crypto";
 import jwt, { JwtPayload } from "jsonwebtoken";
 import { prisma } from "../config/prisma";
+import { accessCookieOptions, refreshCookieOptions } from "../config/cookies";
 import {
   ApiError,
   ApiResponse,
@@ -19,8 +20,6 @@ const publicUserSelect = {
   email: true,
   createdAt: true,
 } as const;
-
-const cookieOptions = { httpOnly: true, secure: true };
 
 const hashToken = (token: string) =>
   crypto.createHash("sha256").update(token).digest("hex");
@@ -110,8 +109,8 @@ const loginUser = async (req: Request, res: Response) => {
 
   return res
     .status(200)
-    .cookie("accessToken", accessToken, cookieOptions)
-    .cookie("refreshToken", refreshToken, cookieOptions)
+    .cookie("accessToken", accessToken, accessCookieOptions())
+    .cookie("refreshToken", refreshToken, refreshCookieOptions())
     .json(
       new ApiResponse(
         200,
@@ -132,8 +131,8 @@ const logoutUser = async (req: AuthenticatedRequest, res: Response) => {
 
   return res
     .status(200)
-    .clearCookie("accessToken", cookieOptions)
-    .clearCookie("refreshToken", cookieOptions)
+    .clearCookie("accessToken", accessCookieOptions())
+    .clearCookie("refreshToken", refreshCookieOptions())
     .json(new ApiResponse(200, null, "User logged out successfully"));
 };
 
@@ -180,8 +179,8 @@ const refreshAccessToken = async (req: Request, res: Response) => {
 
   return res
     .status(200)
-    .cookie("accessToken", accessToken, cookieOptions)
-    .cookie("refreshToken", refreshToken, cookieOptions)
+    .cookie("accessToken", accessToken, accessCookieOptions())
+    .cookie("refreshToken", refreshToken, refreshCookieOptions())
     .json(
       new ApiResponse(
         200,
@@ -237,8 +236,8 @@ const deleteUser = async (req: AuthenticatedRequest, res: Response) => {
 
   return res
     .status(200)
-    .clearCookie("accessToken", cookieOptions)
-    .clearCookie("refreshToken", cookieOptions)
+    .clearCookie("accessToken", accessCookieOptions())
+    .clearCookie("refreshToken", refreshCookieOptions())
     .json(new ApiResponse(200, null, "User deleted successfully"));
 };
 

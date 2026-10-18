@@ -1,15 +1,17 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import { connectDatabase } from "./config/index";
+import helmet from "helmet";
+import { connectDatabase, parseTrustProxy } from "./config/index";
 import routes from "./routes/index";
-import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import { errorHandler, notFoundHandler } from "./middlewares";
 
-dotenv.config();
-
 const app = express();
 const PORT = process.env.PORT;
+
+app.set("trust proxy", parseTrustProxy(process.env.TRUST_PROXY));
+app.use(helmet());
 app.use(
   cors({
     origin: process.env.CORS_ORIGIN,
