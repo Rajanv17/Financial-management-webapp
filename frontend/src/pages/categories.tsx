@@ -132,7 +132,7 @@ export default function Categories() {
   const renderAddButton = () => (
     <Button type="button" onClick={openCreate}>
       <Plus />
-      Add Category
+      Add category
     </Button>
   );
 

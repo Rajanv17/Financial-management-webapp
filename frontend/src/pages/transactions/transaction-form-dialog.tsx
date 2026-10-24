@@ -1,10 +1,12 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -21,12 +23,12 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Category } from "@/features/categories/types";
 import { transactionFormSchema } from "@/features/transactions/schemas";
 import {
@@ -38,6 +40,7 @@ import {
 } from "@/features/transactions/types";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ApiClientError } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 const todayInputValue = () => {
   const now = new Date();
@@ -94,6 +97,7 @@ export function TransactionFormDialog({
   onSubmit,
 }: TransactionFormDialogProps) {
   const isMobile = useIsMobile();
+  const triggerRef = useRef<HTMLElement | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
@@ -115,6 +119,36 @@ export function TransactionFormDialog({
     [categories, selectedType],
   );
 
+  useLayoutEffect(() => {
+    if (!open) return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) {
+      triggerRef.current = active;
+    }
+  }, [open]);
+
+  const restoreTriggerFocus = () => {
+    triggerRef.current?.focus();
+  };
+
+  const handleOpenChange = (next: boolean) => {
+    onOpenChange(next);
+    if (!next) {
+      restoreTriggerFocus();
+    }
+  };
+
+  const selectType = (value: "income" | "expense") => {
+    form.setValue("type", value, { shouldDirty: true, shouldValidate: true });
+    const currentCategory = form.getValues("categoryId");
+    const stillValid = categories.some(
+      (category) => category.id === currentCategory && category.type === value,
+    );
+    if (!stillValid) {
+      form.setValue("categoryId", "");
+    }
+  };
+
   const submit = form.handleSubmit(async (values) => {
     setFormError(null);
     try {
@@ -132,41 +166,93 @@ export function TransactionFormDialog({
     <form id="transaction-form" onSubmit={submit} className="space-y-4" noValidate>
       <div className="space-y-2">
         <Label id="transaction-type-label">Type</Label>
-        <ToggleGroup
-          type="single"
-          value={selectedType}
+        <div
+          role="radiogroup"
           aria-labelledby="transaction-type-label"
-          onValueChange={(value) => {
-            if (value === "income" || value === "expense") {
-              form.setValue("type", value);
-              const currentCategory = form.getValues("categoryId");
-              const stillValid = categories.some(
-                (category) =>
-                  category.id === currentCategory && category.type === value,
-              );
-              if (!stillValid) {
-                form.setValue("categoryId", "");
-              }
+          className="grid grid-cols-2 gap-2"
+          onKeyDown={(event) => {
+            if (
+              event.key === "ArrowRight" ||
+              event.key === "ArrowLeft" ||
+              event.key === "ArrowUp" ||
+              event.key === "ArrowDown"
+            ) {
+              event.preventDefault();
+              selectType(selectedType === "expense" ? "income" : "expense");
             }
           }}
-          variant="outline"
         >
-          <ToggleGroupItem value="expense">Expense</ToggleGroupItem>
-          <ToggleGroupItem value="income">Income</ToggleGroupItem>
-        </ToggleGroup>
+          {(
+            [
+              { value: "income", label: "Income" },
+              { value: "expense", label: "Expense" },
+            ] as const
+          ).map((option) => {
+            const pressed = selectedType === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="radio"
+                aria-checked={pressed}
+                aria-pressed={pressed}
+                onClick={() => selectType(option.value)}
+                className={cn(
+                  "flex min-h-11 items-center justify-center gap-2 rounded-md border text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  pressed && option.value === "income" &&
+                    "border-success bg-success text-primary-foreground",
+                  pressed && option.value === "expense" &&
+                    "border-danger bg-danger text-primary-foreground",
+                  !pressed &&
+                    "border-border bg-background text-foreground hover:bg-accent",
+                )}
+              >
+                {pressed ? <Check className="size-4" aria-hidden="true" /> : null}
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="transaction-title">Title</Label>
+        <Input
+          id="transaction-title"
+          aria-invalid={!!form.formState.errors.title}
+          aria-describedby={
+            form.formState.errors.title ? "transaction-title-error" : undefined
+          }
+          {...form.register("title")}
+        />
+        {form.formState.errors.title ? (
+          <p id="transaction-title-error" className="text-sm text-destructive">
+            {form.formState.errors.title.message}
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-2">
         <Label htmlFor="transaction-amount">Amount</Label>
-        <Input
-          id="transaction-amount"
-          inputMode="decimal"
-          aria-invalid={!!form.formState.errors.amount}
-          aria-describedby={
-            form.formState.errors.amount ? "transaction-amount-error" : undefined
-          }
-          {...form.register("amount")}
-        />
+        <div className="relative">
+          <span
+            className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground"
+            aria-hidden="true"
+          >
+            ₹
+          </span>
+          <Input
+            id="transaction-amount"
+            inputMode="decimal"
+            placeholder="0.00"
+            className="pl-8 tabular-nums"
+            aria-invalid={!!form.formState.errors.amount}
+            aria-describedby={
+              form.formState.errors.amount ? "transaction-amount-error" : undefined
+            }
+            {...form.register("amount")}
+          />
+        </div>
         {form.formState.errors.amount ? (
           <p id="transaction-amount-error" className="text-sm text-destructive">
             {form.formState.errors.amount.message}
@@ -249,7 +335,7 @@ export function TransactionFormDialog({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="transaction-description">Description</Label>
+        <Label htmlFor="transaction-description">Description (optional)</Label>
         <Textarea
           id="transaction-description"
           aria-invalid={!!form.formState.errors.description}
@@ -270,23 +356,6 @@ export function TransactionFormDialog({
         ) : null}
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="transaction-title">Title</Label>
-        <Input
-          id="transaction-title"
-          aria-invalid={!!form.formState.errors.title}
-          aria-describedby={
-            form.formState.errors.title ? "transaction-title-error" : undefined
-          }
-          {...form.register("title")}
-        />
-        {form.formState.errors.title ? (
-          <p id="transaction-title-error" className="text-sm text-destructive">
-            {form.formState.errors.title.message}
-          </p>
-        ) : null}
-      </div>
-
       {formError ? (
         <p className="text-sm text-destructive" role="alert">
           {formError}
@@ -300,7 +369,7 @@ export function TransactionFormDialog({
       <Button
         type="button"
         variant="outline"
-        onClick={() => onOpenChange(false)}
+        onClick={() => handleOpenChange(false)}
         disabled={pending}
       >
         Cancel
@@ -311,32 +380,52 @@ export function TransactionFormDialog({
     </>
   );
 
+  const title = transaction ? "Edit transaction" : "Add transaction";
+  const description = transaction
+    ? "Update this transaction. Amounts are in INR."
+    : "Record income or an expense. Amounts are in INR.";
+
   if (isMobile) {
     return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>
-              {transaction ? "Edit transaction" : "Add transaction"}
-            </SheetTitle>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
+        <SheetContent
+          side="bottom"
+          className="flex max-h-[90vh] flex-col gap-0 overflow-hidden pb-[env(safe-area-inset-bottom)]"
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            restoreTriggerFocus();
+          }}
+        >
+          <SheetHeader className="shrink-0">
+            <SheetTitle>{title}</SheetTitle>
+            <SheetDescription>{description}</SheetDescription>
           </SheetHeader>
-          <div className="px-4 pb-2">{fields}</div>
-          <SheetFooter className="flex-row justify-end">{actions}</SheetFooter>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">{fields}</div>
+          <SheetFooter className="mt-0 shrink-0 flex-row justify-end border-t border-border">
+            {actions}
+          </SheetFooter>
         </SheetContent>
       </Sheet>
     );
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {transaction ? "Edit transaction" : "Add transaction"}
-          </DialogTitle>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          restoreTriggerFocus();
+        }}
+      >
+        <DialogHeader className="shrink-0 px-6 pt-6 pr-12 pb-4">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
-        {fields}
-        <DialogFooter>{actions}</DialogFooter>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-2">{fields}</div>
+        <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
+          {actions}
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

@@ -1,5 +1,6 @@
 import { prisma } from "../config/prisma";
-import type { PaymentMethod, TransactionType } from "../generated/prisma/client";
+import type { Category, PaymentMethod, TransactionType } from "../generated/prisma/client";
+import { budgetUsage } from "../utils/budgetStatus.util";
 
 const ALLOWED_USERNAME = "demo";
 
@@ -20,6 +21,7 @@ type TxDraft = {
   year: number;
   month: number;
   day: number;
+  at?: Date;
 };
 
 const monthlyTemplates: Array<{
@@ -226,15 +228,91 @@ const oneOffTemplates: Array<{
   },
 ];
 
+type BudgetBand = "normal" | "warning" | "exceeded";
+
 const budgetTargets: Array<{
   categoryName: string;
-  band: "under" | "mid" | "warn" | "over";
+  targetUsage: number;
+  band: BudgetBand;
 }> = [
-  { categoryName: "Housing", band: "under" },
-  { categoryName: "Food & Drinks", band: "warn" },
-  { categoryName: "Transportation", band: "over" },
-  { categoryName: "Shopping", band: "mid" },
-  { categoryName: "Life & Entertainment", band: "mid" },
+  { categoryName: "Housing", targetUsage: 0.42, band: "normal" },
+  { categoryName: "Shopping", targetUsage: 0.65, band: "normal" },
+  { categoryName: "Life & Entertainment", targetUsage: 0.6, band: "normal" },
+  { categoryName: "Food & Drinks", targetUsage: 0.88, band: "warning" },
+  { categoryName: "Transportation", targetUsage: 1.15, band: "exceeded" },
+];
+
+const customCategorySpecs: Array<{
+  name: string;
+  type: TransactionType;
+  icon: string;
+  color: string;
+  archive: boolean;
+}> = [
+  {
+    name: "Gym",
+    type: "expense",
+    icon: "heart-pulse",
+    color: "#84cc16",
+    archive: false,
+  },
+  {
+    name: "Pets",
+    type: "expense",
+    icon: "gift",
+    color: "#36A2EB",
+    archive: true,
+  },
+];
+
+const recentExpenses: Array<{
+  hoursAgo: number;
+  title: string;
+  description: string;
+  amount: number;
+  categoryName: string;
+  paymentMethod: PaymentMethod;
+}> = [
+  {
+    hoursAgo: 6,
+    title: "Filter coffee",
+    description: "Coffee at the office canteen",
+    amount: 45,
+    categoryName: "Food & Drinks",
+    paymentMethod: "CASH",
+  },
+  {
+    hoursAgo: 18,
+    title: "Rapido to metro",
+    description: "Bike taxi from Koramangala to the metro",
+    amount: 92,
+    categoryName: "Transportation",
+    paymentMethod: "UPI",
+  },
+  {
+    hoursAgo: 30,
+    title: "Zomato lunch",
+    description: "South Indian meals near office",
+    amount: 285,
+    categoryName: "Food & Drinks",
+    paymentMethod: "UPI",
+  },
+  {
+    hoursAgo: 48,
+    title: "Decathlon socks",
+    description: "Sports socks from the weekend sale",
+    amount: 399,
+    categoryName: "Shopping",
+    paymentMethod: "DEBIT_CARD",
+  },
+  {
+    hoursAgo: 65,
+    title: "Cult gym session",
+    description: "Drop-in workout at Cult Fit",
+    amount: 299,
+    categoryName: "Gym",
+    paymentMethod: "UPI",
+  },
 ];
 
 const fallbackSpend: Record<string, { title: string; description: string; amount: number; paymentMethod: PaymentMethod }> =
@@ -273,6 +351,67 @@ const fallbackSpend: Record<string, { title: string; description: string; amount
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
+const roundUpTo100 = (value: number) => Math.ceil(value / 100) * 100;
+
+const statusToBand = (status: ReturnType<typeof budgetUsage>["status"]): BudgetBand => {
+  if (status === "exceeded") return "exceeded";
+  if (status === "near_limit") return "warning";
+  return "normal";
+};
+
+const usageBand = (percentageUsed: number): BudgetBand => {
+  if (percentageUsed >= 100) return "exceeded";
+  if (percentageUsed >= 80) return "warning";
+  return "normal";
+};
+
+const computeBudgetLimit = (
+  categoryName: string,
+  spent: number,
+  targetUsage: number,
+  expectedBand: BudgetBand,
+) => {
+  if (spent <= 0) {
+    throw new Error(
+      `Cannot compute a budget for "${categoryName}" because current-month spend is ${spent}.`,
+    );
+  }
+
+  let amount = roundUpTo100(spent / targetUsage);
+  if (amount < 100) amount = 100;
+
+  const bandOrder: Record<BudgetBand, number> = {
+    normal: 0,
+    warning: 1,
+    exceeded: 2,
+  };
+
+  for (let step = 0; step < 1_000; step += 1) {
+    const { percentageUsed, status } = budgetUsage(spent, amount);
+    const band = usageBand(percentageUsed);
+    if (band !== statusToBand(status)) {
+      throw new Error(
+        `Budget band mismatch for "${categoryName}": percentage ${percentageUsed} maps to ${band} but status is ${status}.`,
+      );
+    }
+    if (band === expectedBand) {
+      return { amount, percentageUsed, band };
+    }
+    if (bandOrder[band] > bandOrder[expectedBand]) {
+      amount += 100;
+      continue;
+    }
+    if (amount <= 100) {
+      break;
+    }
+    amount -= 100;
+  }
+
+  throw new Error(
+    `Could not place "${categoryName}" in the ${expectedBand} band after adjusting the limit (spent ${spent}).`,
+  );
+};
+
 const addMonths = (year: number, month: number, delta: number) => {
   const date = new Date(Date.UTC(year, month - 1 + delta, 1));
   return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 };
@@ -295,14 +434,6 @@ const databaseHost = (url: string) => {
   } catch {
     return "unknown";
   }
-};
-
-const amountForBand = (spent: number, band: "under" | "mid" | "warn" | "over") => {
-  if (spent <= 0) {
-    return band === "over" ? 100 : 5_000;
-  }
-  const ratio = { under: 0.4, mid: 0.62, warn: 0.88, over: 1.18 }[band];
-  return Math.max(round2(spent / ratio), 1);
 };
 
 const monthWindows = (today: Date): MonthWindow[] => {
@@ -359,7 +490,7 @@ const seedDemo = async () => {
     const category = categoryByName.get(name);
     if (!category) {
       throw new Error(
-        `Default category "${name}" was not found. Run npm run seed:categories first.`,
+        `Category "${name}" was not found. Run npm run seed:categories first.`,
       );
     }
     return category;
@@ -440,8 +571,66 @@ const seedDemo = async () => {
     });
   }
 
+  const now = Date.now();
+  for (const item of recentExpenses) {
+    const at = new Date(now - item.hoursAgo * 60 * 60 * 1000);
+    if (at.getTime() > now) continue;
+    drafts.push({
+      title: item.title,
+      description: item.description,
+      amount: item.amount,
+      type: "expense",
+      categoryName: item.categoryName,
+      paymentMethod: item.paymentMethod,
+      year: at.getFullYear(),
+      month: at.getMonth() + 1,
+      day: at.getDate(),
+      at,
+    });
+  }
+
   const deletedTx = await prisma.transaction.deleteMany({ where: { userId: user.id } });
   const deletedBudgets = await prisma.budget.deleteMany({ where: { userId: user.id } });
+  const deletedCustomCategories = await prisma.category.deleteMany({
+    where: {
+      userId: user.id,
+      isDefault: false,
+      OR: customCategorySpecs.map((spec) => ({
+        name: spec.name,
+        type: spec.type,
+      })),
+    },
+  });
+
+  const customCategories: Array<{
+    spec: (typeof customCategorySpecs)[number];
+    category: Category;
+  }> = [];
+  for (const spec of customCategorySpecs) {
+    const created = await prisma.category.create({
+      data: {
+        userId: user.id,
+        name: spec.name,
+        type: spec.type,
+        icon: spec.icon,
+        color: spec.color,
+        isDefault: false,
+      },
+    });
+    categoryByName.set(created.name, created);
+    customCategories.push({ spec, category: created });
+  }
+
+  const archivedCustom: Category[] = [];
+  for (const item of customCategories) {
+    if (!item.spec.archive) continue;
+    const archived = await prisma.category.update({
+      where: { id: item.category.id },
+      data: { isArchived: true, archivedAt: new Date() },
+    });
+    categoryByName.set(archived.name, archived);
+    archivedCustom.push(archived);
+  }
 
   await prisma.transaction.createMany({
     data: drafts.map((draft) => ({
@@ -450,7 +639,7 @@ const seedDemo = async () => {
       title: draft.title,
       amount: draft.amount,
       type: draft.type,
-      date: utcDay(draft.year, draft.month, draft.day),
+      date: draft.at ?? utcDay(draft.year, draft.month, draft.day),
       description: draft.description,
       paymentMethod: draft.paymentMethod,
     })),
@@ -477,8 +666,19 @@ const seedDemo = async () => {
   const budgets = budgetTargets.map((target) => {
     const category = requireCategory(target.categoryName);
     const spent = spentByCategoryId.get(category.id) ?? 0;
-    const amount = amountForBand(spent, target.band);
-    return { category, spent, amount, band: target.band };
+    const computed = computeBudgetLimit(
+      target.categoryName,
+      spent,
+      target.targetUsage,
+      target.band,
+    );
+    return {
+      category,
+      spent,
+      amount: computed.amount,
+      percentageUsed: computed.percentageUsed,
+      band: computed.band,
+    };
   });
 
   await prisma.budget.createMany({
@@ -496,16 +696,25 @@ const seedDemo = async () => {
 
   console.log(`Seeded existing user "${user.username}" (${user.id})`);
   console.log(
-    `Removed ${deletedTx.count} transactions and ${deletedBudgets.count} budgets`,
+    `Removed ${deletedTx.count} transactions, ${deletedBudgets.count} budgets, and ${deletedCustomCategories.count} custom categories`,
   );
   console.log(
     `Inserted ${drafts.length} transactions (${incomeCount} income, ${expenseCount} expense) from ${windows[0]?.year}-${String(windows[0]?.month).padStart(2, "0")} through ${current.year}-${String(current.month).padStart(2, "0")}`,
   );
+  console.log(
+    `Inserted ${recentExpenses.length} expenses dated within the last 3 days (none in the future)`,
+  );
+  console.log(
+    `Created ${customCategories.length} custom categories (${archivedCustom.map((item) => item.name).join(", ") || "none"} archived):`,
+  );
+  for (const item of customCategories) {
+    const state = item.spec.archive ? "archived" : "active";
+    console.log(`  ${item.category.name} (${item.category.type}, ${state})`);
+  }
   console.log(`Inserted ${budgets.length} budgets for ${current.year}-${String(current.month).padStart(2, "0")}:`);
   for (const budget of budgets) {
-    const pct = budget.amount === 0 ? 0 : Math.round((budget.spent / budget.amount) * 100);
     console.log(
-      `  ${budget.category.name}: limit ${budget.amount.toFixed(2)}, spent ${budget.spent.toFixed(2)} (${pct}% ${budget.band})`,
+      `  ${budget.category.name}: limit ${budget.amount.toFixed(2)}, spent ${budget.spent.toFixed(2)} (${budget.percentageUsed}%, ${budget.band})`,
     );
   }
 };

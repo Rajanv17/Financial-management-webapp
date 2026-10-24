@@ -188,7 +188,7 @@ export default function TransactionsPage() {
             }}
           >
             <Plus />
-            Add Transaction
+            Add transaction
           </Button>
         }
       />
@@ -313,7 +313,7 @@ export default function TransactionsPage() {
               }}
             >
               <Plus />
-              Add Transaction
+              Add transaction
             </Button>
           }
         />

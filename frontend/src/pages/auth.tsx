@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Wallet } from "lucide-react";
+import { AuthIllustration } from "@/components/auth/auth-illustration";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -57,14 +58,14 @@ export default function AuthPage() {
 
   return (
     <div className="grid min-h-svh bg-background md:grid-cols-2">
-      <aside className="hidden flex-col justify-between bg-sidebar px-10 py-12 text-sidebar-foreground md:flex">
+      <aside className="hidden flex-col bg-sidebar px-10 py-12 text-sidebar-foreground md:flex">
         <div className="flex items-center gap-3">
           <div className="flex size-11 items-center justify-center rounded-lg bg-sidebar-primary">
             <Wallet className="size-6 text-sidebar-primary-foreground" />
           </div>
           <span className="text-lg font-semibold">Finance Manager</span>
         </div>
-        <div className="max-w-sm space-y-3">
+        <div className="mt-10 max-w-sm space-y-3">
           <h1 className="text-3xl font-semibold tracking-tight">
             Track money with a calm, clear workspace.
           </h1>
@@ -73,8 +74,11 @@ export default function AuthPage() {
             where your money goes.
           </p>
         </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center py-8">
+          <AuthIllustration />
+        </div>
         <p className="text-xs text-sidebar-foreground/60">
-          Amounts are in INR. Your session is stored in httpOnly cookies.
+          Amounts are in INR (Indian Rupee)
         </p>
       </aside>
 
@@ -98,7 +102,11 @@ export default function AuthPage() {
             </p>
           </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
             <TabsList className="mb-6 grid w-full grid-cols-2">
               <TabsTrigger value="login">Sign in</TabsTrigger>
               <TabsTrigger value="register">Create account</TabsTrigger>

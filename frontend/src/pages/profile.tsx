@@ -72,7 +72,7 @@ export default function ProfilePage() {
     <div className="space-y-6">
       <PageHeader
         title="Profile"
-        description="Username and email for this account. There is no full name field."
+        description="Manage your account details."
       />
 
       {profileQuery.isLoading && !profile ? (
@@ -139,7 +139,10 @@ export default function ProfilePage() {
                   />
                 </div>
                 {form.formState.errors.username ? (
-                  <p id="profile-username-error" className="text-sm text-destructive">
+                  <p
+                    id="profile-username-error"
+                    className="text-sm text-destructive"
+                  >
                     {form.formState.errors.username.message}
                   </p>
                 ) : null}
@@ -155,13 +158,18 @@ export default function ProfilePage() {
                     readOnly={!editing}
                     aria-invalid={!!form.formState.errors.email}
                     aria-describedby={
-                      form.formState.errors.email ? "profile-email-error" : undefined
+                      form.formState.errors.email
+                        ? "profile-email-error"
+                        : undefined
                     }
                     {...form.register("email")}
                   />
                 </div>
                 {form.formState.errors.email ? (
-                  <p id="profile-email-error" className="text-sm text-destructive">
+                  <p
+                    id="profile-email-error"
+                    className="text-sm text-destructive"
+                  >
                     {form.formState.errors.email.message}
                   </p>
                 ) : null}

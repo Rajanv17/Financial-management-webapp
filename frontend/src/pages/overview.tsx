@@ -93,11 +93,14 @@ const greetingForHour = (hour: number) => {
 const formatMonthTick = (month: string) => {
   const [year, monthPart] = month.split("-");
   const date = new Date(Date.UTC(Number(year), Number(monthPart) - 1, 1));
-  return new Intl.DateTimeFormat("en-IN", {
+  const parts = new Intl.DateTimeFormat("en-IN", {
     month: "short",
-    year: "2-digit",
+    year: "numeric",
     timeZone: "UTC",
-  }).format(date);
+  }).formatToParts(date);
+  const monthLabel = parts.find((part) => part.type === "month")?.value ?? "";
+  const yearLabel = parts.find((part) => part.type === "year")?.value ?? "";
+  return `${monthLabel} ${yearLabel}`.trim();
 };
 
 const formatDate = (iso: string) =>
@@ -106,6 +109,43 @@ const formatDate = (iso: string) =>
     month: "short",
     year: "numeric",
   }).format(new Date(iso));
+
+const formatShare = (percent: number) => (percent < 1 ? "<1%" : `${percent}%`);
+
+const remainingLabel = (remaining: number) => {
+  if (remaining < 0) {
+    return `Over by ${formatINR(-remaining)}`;
+  }
+  return `Remaining ${formatINR(remaining)}`;
+};
+
+/** One native rounded rect. Recharts `radius` draws elliptical arcs on a `<path>` that
+ * also has `x`/`y`/`width`/`height`, which paints a 1px horizontal seam near the top. */
+function roundedTopBar(props: unknown) {
+  const { x = 0, y = 0, width = 0, height = 0, fill } = props as {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    fill?: string;
+  };
+  if (width <= 0 || height <= 0) {
+    return <rect x={0} y={0} width={0} height={0} fill="none" />;
+  }
+  const r = Math.min(4, width / 2, height / 2);
+  return (
+    <rect
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      rx={r}
+      ry={r}
+      fill={fill}
+      stroke="none"
+    />
+  );
+}
 
 const queryErrorMessage = (error: unknown, fallback: string) =>
   error instanceof ApiClientError ? error.message : fallback;
@@ -435,7 +475,7 @@ export default function OverviewPage() {
             !budgetSummaryQuery.isLoading &&
             !budgetSummaryQuery.isError ? (
               <StatCard
-                label="Budget remaining"
+                label="Budget left this month"
                 value={<Money amount={budgetSummaryQuery.data.remaining} />}
                 icon={PiggyBank}
               />
@@ -499,14 +539,14 @@ export default function OverviewPage() {
                             dataKey="income"
                             name="Income"
                             fill="var(--success)"
-                            radius={[4, 4, 0, 0]}
+                            shape={roundedTopBar}
                             isAnimationActive={!reduceMotion}
                           />
                           <Bar
                             dataKey="expense"
                             name="Expense"
                             fill="var(--danger)"
-                            radius={[4, 4, 0, 0]}
+                            shape={roundedTopBar}
                             isAnimationActive={!reduceMotion}
                           />
                         </BarChart>
@@ -588,23 +628,26 @@ export default function OverviewPage() {
                         </p>
                       </div>
                     </div>
-                    <ul className="space-y-2">
+                    <ul className="min-w-0 space-y-2">
                       {categoryChart.map((item) => (
                         <li
                           key={item.categoryId}
-                          className="flex items-center justify-between gap-3 text-sm"
+                          className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 text-sm"
                         >
-                          <span className="flex min-w-0 items-center gap-2">
+                          <span className="flex min-w-0 items-start gap-2">
                             <span
-                              className="size-2.5 shrink-0 rounded-full bg-chart-1"
+                              className="mt-1.5 size-2.5 shrink-0 rounded-full bg-chart-1"
                               style={{ backgroundColor: item.fill }}
                             />
-                            <span className="truncate text-foreground">
+                            <span
+                              className="line-clamp-2 min-w-0 text-foreground"
+                              title={item.displayName}
+                            >
                               {item.displayName}
                             </span>
                           </span>
                           <span className="shrink-0 tabular-nums text-muted-foreground">
-                            {formatINR(item.total)} · {item.percent}%
+                            {formatINR(item.total)} · {formatShare(item.percent)}
                           </span>
                         </li>
                       ))}
@@ -623,7 +666,7 @@ export default function OverviewPage() {
                           <tr key={item.categoryId}>
                             <td>{item.displayName}</td>
                             <td>{formatINR(item.total)}</td>
-                            <td>{item.percent}%</td>
+                            <td>{formatShare(item.percent)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -744,8 +787,14 @@ export default function OverviewPage() {
                           <p className="font-medium text-foreground">
                             {budget.category.name}
                           </p>
-                          <p className="text-sm tabular-nums text-muted-foreground">
-                            Remaining {formatINR(budget.remaining)}
+                          <p
+                            className={
+                              budget.remaining < 0
+                                ? "text-sm tabular-nums text-danger"
+                                : "text-sm tabular-nums text-muted-foreground"
+                            }
+                          >
+                            {remainingLabel(budget.remaining)}
                           </p>
                         </div>
                         <BudgetProgress
