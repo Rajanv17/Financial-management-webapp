@@ -123,9 +123,7 @@ export default function AnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle>Income and expenses</CardTitle>
-              <CardDescription>
-                Sample monthly series. Two lines are plotted, matching the legend.
-              </CardDescription>
+              <CardDescription>Sample monthly series</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="h-72" aria-hidden="true">

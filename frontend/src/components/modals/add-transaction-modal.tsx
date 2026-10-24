@@ -63,7 +63,7 @@ export function AddTransactionModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-125">
         <DialogHeader>
-          <DialogTitle>Add Transaction</DialogTitle>
+          <DialogTitle>Add transaction</DialogTitle>
         </DialogHeader>
 
         {/* Type Selection */}
@@ -189,7 +189,7 @@ export function AddTransactionModal({
             onClick={handleSubmit}
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            Save Transaction
+            Save transaction
           </Button>
         </DialogFooter>
       </DialogContent>

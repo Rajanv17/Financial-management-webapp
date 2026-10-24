@@ -186,7 +186,12 @@ export default function BudgetPage() {
     },
   });
 
-  const budgets = budgetsQuery.data ?? [];
+  const budgets = useMemo(() => {
+    const items = budgetsQuery.data ?? [];
+    return [...items].sort(
+      (left, right) => right.percentageUsed - left.percentageUsed,
+    );
+  }, [budgetsQuery.data]);
   const summary = summaryQuery.data;
   const categories = categoriesQuery.data ?? [];
   const isLoading = budgetsQuery.isLoading || summaryQuery.isLoading;
