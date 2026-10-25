@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { defaultCategories, registerAndLogin } from "./helpers";
+import { defaultAccount, defaultCategories, registerAndLogin } from "./helpers";
 
 describe("budgets", () => {
   it("spent equals the sum of expense transactions in that month", async () => {
     const { client } = await registerAndLogin();
     const { expense, income, categories } = await defaultCategories(client);
+    const account = await defaultAccount(client);
     const otherExpense = categories.find(
       (category) => category.type === "expense" && category.id !== expense.id,
     );
@@ -22,6 +23,7 @@ describe("budgets", () => {
       amount: 150.5,
       type: "expense",
       categoryId: expense.id,
+      accountId: account.id,
       date: "2026-05-10T12:00:00.000Z",
     });
     await createTx({
@@ -29,6 +31,7 @@ describe("budgets", () => {
       amount: 49.5,
       type: "expense",
       categoryId: expense.id,
+      accountId: account.id,
       date: "2026-05-20T12:00:00.000Z",
     });
     await createTx({
@@ -36,6 +39,7 @@ describe("budgets", () => {
       amount: 80,
       type: "expense",
       categoryId: otherExpense.id,
+      accountId: account.id,
       date: "2026-05-12T12:00:00.000Z",
     });
     await createTx({
@@ -43,6 +47,7 @@ describe("budgets", () => {
       amount: 999,
       type: "expense",
       categoryId: expense.id,
+      accountId: account.id,
       date: "2026-06-01T00:00:00.000Z",
     });
     await createTx({
@@ -50,6 +55,7 @@ describe("budgets", () => {
       amount: 2000,
       type: "income",
       categoryId: income.id,
+      accountId: account.id,
       date: "2026-05-15T12:00:00.000Z",
     });
 

@@ -1,5 +1,27 @@
 import { describe, expect, it } from "vitest";
-import { api, cookieNames, getCookie, registerAndLogin, registerUser } from "./helpers";
+import {
+  api,
+  cookieNames,
+  getCookie,
+  listAccounts,
+  registerAndLogin,
+  registerUser,
+} from "./helpers";
+
+describe("registration", () => {
+  it("creates exactly one default Unassigned account", async () => {
+    const { client } = await registerAndLogin();
+    const accounts = await listAccounts(client);
+
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]).toMatchObject({
+      name: "Unassigned",
+      type: "other",
+      isDefault: true,
+      isArchived: false,
+    });
+  });
+});
 
 describe("auth", () => {
   it("register then login sets both cookies", async () => {
