@@ -8,6 +8,7 @@ import {
   Receipt,
   TrendingDown,
   TrendingUp,
+  Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -54,7 +55,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/auth-provider";
 import { createBudget, fetchBudgetSummary, fetchBudgets } from "@/features/budgets/api";
 import type { BudgetWritePayload } from "@/features/budgets/types";
-import { fetchAccounts } from "@/features/accounts/api";
+import { AccountAmount } from "@/features/accounts/account-amount";
+import { fetchAccountSummary, fetchAccounts } from "@/features/accounts/api";
 import { writeLastAccountId } from "@/features/accounts/last-account";
 import { fetchCategories } from "@/features/categories/api";
 import { fetchDashboardSummary } from "@/features/dashboard/api";
@@ -69,7 +71,7 @@ import { createTransaction, fetchTransactions } from "@/features/transactions/ap
 import type { TransactionWritePayload } from "@/features/transactions/types";
 import { TransactionFormDialog } from "@/pages/transactions/transaction-form-dialog";
 import { ApiClientError } from "@/lib/api";
-import { formatINR } from "@/lib/format";
+import { formatINR, isNegativeMoneyString } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
 
 const CHART_FILLS = [
@@ -272,6 +274,11 @@ export default function OverviewPage() {
     queryFn: () => fetchAccounts(false),
   });
 
+  const accountSummaryQuery = useQuery({
+    queryKey: queryKeys.accounts.summary,
+    queryFn: fetchAccountSummary,
+  });
+
   const createTransactionMutation = useMutation({
     mutationFn: (payload: TransactionWritePayload) => createTransaction(payload),
     onSuccess: async (_data, payload) => {
@@ -371,7 +378,8 @@ export default function OverviewPage() {
 
       {recentQuery.isLoading && !recent ? (
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
@@ -419,7 +427,7 @@ export default function OverviewPage() {
 
       {!isNewUser && !(recentQuery.isLoading && !recent) ? (
         <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
             {summaryQuery.isLoading ? (
               <>
                 <StatCardSkeleton />
@@ -429,7 +437,7 @@ export default function OverviewPage() {
             ) : null}
 
             {summaryQuery.isError && !summaryQuery.isLoading ? (
-              <div className="md:col-span-2 lg:col-span-3">
+              <div className="sm:col-span-2 xl:col-span-3">
                 <ErrorState
                   className="py-10"
                   message={queryErrorMessage(
@@ -448,6 +456,7 @@ export default function OverviewPage() {
                   value={
                     <Money amount={summary.totals.income} className="text-success" />
                   }
+                  description={periodLabel}
                   icon={TrendingUp}
                 />
                 <StatCard
@@ -455,14 +464,65 @@ export default function OverviewPage() {
                   value={
                     <Money amount={summary.totals.expense} className="text-danger" />
                   }
+                  description={periodLabel}
                   icon={TrendingDown}
                 />
                 <StatCard
                   label="Net for period"
                   value={<Money amount={summary.totals.net} />}
+                  description="Income minus expenses"
                   icon={ArrowUpDown}
                 />
               </>
+            ) : null}
+
+            {accountSummaryQuery.isLoading ? <StatCardSkeleton /> : null}
+
+            {accountSummaryQuery.isError && !accountSummaryQuery.isLoading ? (
+              <ErrorState
+                className="py-10"
+                message={queryErrorMessage(
+                  accountSummaryQuery.error,
+                  "Could not load total balance.",
+                )}
+                onRetry={() => void accountSummaryQuery.refetch()}
+              />
+            ) : null}
+
+            {accountSummaryQuery.data &&
+            !accountSummaryQuery.isLoading &&
+            !accountSummaryQuery.isError ? (
+              <StatCard
+                label={
+                  <span className="flex flex-wrap items-center gap-2">
+                    Total balance
+                    {isNegativeMoneyString(
+                      accountSummaryQuery.data.netBalance,
+                    ) ? (
+                      <StatusBadge label="Net negative" tone="danger" />
+                    ) : null}
+                  </span>
+                }
+                value={
+                  <AccountAmount
+                    amount={accountSummaryQuery.data.netBalance}
+                    isCreditCard={false}
+                  />
+                }
+                description={
+                  <Link
+                    to="/dashboard/accounts"
+                    className="underline-offset-4 hover:underline"
+                  >
+                    Across all accounts ·{" "}
+                    {accountSummaryQuery.data.accountCount}{" "}
+                    {accountSummaryQuery.data.accountCount === 1
+                      ? "account"
+                      : "accounts"}
+                  </Link>
+                }
+                icon={Wallet}
+              />
             ) : null}
 
             {budgetSummaryQuery.isLoading ? <StatCardSkeleton /> : null}
@@ -484,6 +544,7 @@ export default function OverviewPage() {
               <StatCard
                 label="Budget left this month"
                 value={<Money amount={budgetSummaryQuery.data.remaining} />}
+                description="Current month"
                 icon={PiggyBank}
               />
             ) : null}

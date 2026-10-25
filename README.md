@@ -18,6 +18,7 @@ A full-stack personal financial application for tracking income and expenses, se
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
 - [Environment Variables](#environment-variables)
+- [Testing](#testing)
 - [Architecture Decisions](#architecture-decisions)
 - [Development Workflow](#development-workflow)
 - [Contributing](#contributing)
@@ -29,8 +30,9 @@ A full-stack personal financial application for tracking income and expenses, se
 ## Features
 
 - **User authentication**: secure registration and login using JWT.
-- **Transactions**: record income and expenses, each tied to a category.
+- **Transactions**: record income and expenses, each tied to a category and an account.
 - **Categories**: organize transactions with custom categories.
+- **Accounts**: bank, cash, wallet, and credit card balances, with a default Unassigned account for new users.
 - **Budgets**: create and track budgets across categories.
 - **Dashboard**: overview of income, expenses, and financial health with charts.
 
@@ -54,10 +56,13 @@ A full-stack personal financial application for tracking income and expenses, se
 Financial-management-webapp/
 ├── backend/              # Express API (routes, controllers, services, middleware)
 │   ├── prisma/           # Prisma schema and migrations
-│   └── .env.example      # Environment variable names (no real values)
+│   ├── .env.example      # Environment variable names (no real values)
+│   └── .env.test.example # Test database URL (name must end with _test)
 ├── frontend/             # React dashboard (shadcn/ui + Tailwind)
+│   └── .env.example      # VITE_API_URL
+├── docs/screenshots/     # README screenshots
 ├── .github/
-│   └── workflows/        # CI pipeline (typecheck, lint, and build on every push and PR)
+│   └── workflows/        # CI pipeline (typecheck, lint, and tests on every push and PR)
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -106,30 +111,60 @@ Open a second terminal:
 ```bash
 cd frontend
 npm install
+cp .env.example .env     # sets VITE_API_URL; skip if you already have .env
 npm run dev
 ```
 
 ### 5. Use the app
 
 1. Create an account or log in.
-2. Add income and expense transactions.
-3. Set up budgets for different categories.
-4. Open the dashboard to view your analytics.
+2. Add bank, cash, wallet, or credit card accounts (a default Unassigned account is created for you).
+3. Add income and expense transactions.
+4. Set up budgets for different categories.
+5. Open the dashboard to view your analytics.
 
 ---
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` in the `backend` folder and fill in the values. Never commit the real `.env` file.
+Copy `.env.example` to `.env` in each app folder and fill in the values. Never commit real `.env` files. Integration tests use a separate `backend/.env.test` (see [Testing](#testing)).
 
-| Variable                                        | Description                                                                                |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `NODE_ENV`                                      | `development` or `production`                                                              |
-| `PORT`                                          | Port the API listens on                                                                    |
-| `DATABASE_URL`                                  | PostgreSQL connection string, e.g. `postgresql://user:password@localhost:5432/finance_app` |
-| `CORS_ORIGIN`                                   | Exact frontend origin allowed by CORS, e.g. `http://localhost:5173`                        |
-| `ACCESS_TOKEN_SECRET` / `ACCESS_TOKEN_EXPIRY`   | Secret and lifetime for access tokens (e.g. `15m`)                                         |
-| `REFRESH_TOKEN_SECRET` / `REFRESH_TOKEN_EXPIRY` | Secret and lifetime for refresh tokens (e.g. `7d`)                                         |
+### Backend (`backend/.env`)
+
+| Variable                                        | Description                                                                                                                      |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`                                      | `development` or `production`                                                                                                    |
+| `PORT`                                          | Port the API listens on                                                                                                          |
+| `DATABASE_URL`                                  | PostgreSQL connection string, e.g. `postgresql://user:password@localhost:5432/finance_app`                                       |
+| `CORS_ORIGIN`                                   | Exact frontend origin allowed by CORS, e.g. `http://localhost:5173`                                                              |
+| `ACCESS_TOKEN_SECRET` / `ACCESS_TOKEN_EXPIRY`   | Secret and lifetime for access tokens (e.g. `1d`)                                                                                |
+| `REFRESH_TOKEN_SECRET` / `REFRESH_TOKEN_EXPIRY` | Secret and lifetime for refresh tokens (e.g. `7d`)                                                                               |
+| `COOKIE_SAMESITE`                               | `lax`, `strict`, or `none`. Used in production; development always uses `lax`                                                    |
+| `TRUST_PROXY`                                   | `false`, `true`, or a hop count such as `1` so `req.ip` is the client address behind a reverse proxy                             |
+| `AUTH_RATE_LIMIT_MAX`                           | Max login, register, and refresh-token requests per window per IP (default `10`)                                                 |
+| `AUTH_RATE_LIMIT_WINDOW_MS`                     | Rate-limit window in milliseconds (default `900000`, 15 minutes)                                                                 |
+| `DEMO_USERNAME`                                 | Optional. Username for `npm run seed:demo` (defaults to `demo`). The script looks up an existing user and never creates accounts |
+| `DEMO_USERNAME_ALLOW`                           | Optional. Set to allow seeding a username other than `demo`                                                                      |
+
+### Frontend (`frontend/.env`)
+
+| Variable       | Description                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------- |
+| `VITE_API_URL` | Backend API base URL including `/api/v1`, e.g. `http://localhost:8000/api/v1`. Must match `CORS_ORIGIN` |
+
+---
+
+## Testing
+
+Backend tests run with Vitest. From `backend/`:
+
+```bash
+cp .env.test.example .env.test   # first time only; point DATABASE_URL at finance_test
+createdb finance_test            # if that database does not exist yet
+npm test
+```
+
+Integration tests load `backend/.env.test` (not `.env`). The `DATABASE_URL` in that file must name a database whose name ends with `_test` (for example `finance_test`). The suite refuses to run against any other database.
 
 ---
 
@@ -149,7 +184,7 @@ Short notes on why things are built the way they are. This section grows as the 
 
 - **Branches:** `main` is protected and always deployable. New work happens on feature branches (for example `feat/budget-limits`) and merges through a pull request.
 - **Commits:** follow [Conventional Commits](https://www.conventionalcommits.org/), using `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, and `chore:`.
-- **CI:** every pull request and every push to `main` runs two GitHub Actions jobs. The backend job starts a PostgreSQL 16 service container, typechecks, and runs tests against a separate `TEST_DATABASE_URL`. The frontend job lints (warnings do not fail the job) and builds with `VITE_API_URL=/api/v1`.
+- **CI:** every pull request and every push to `main` runs two GitHub Actions jobs. The backend job starts a PostgreSQL 16 service container, typechecks, and runs tests against a dedicated `finance_ci_test` database. The frontend job lints (warnings do not fail the job) and builds with `VITE_API_URL=/api/v1`.
 - **Deploy:** not automated yet.
 
 ---
