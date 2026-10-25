@@ -1,5 +1,9 @@
 import { prisma } from "../config/prisma";
-import type { Category, PaymentMethod, TransactionType } from "../generated/prisma/client";
+import type {
+  Category,
+  PaymentMethod,
+  TransactionType,
+} from "../generated/prisma/client";
 import { budgetUsage } from "../utils/budgetStatus.util";
 
 const ALLOWED_USERNAME = "demo";
@@ -265,6 +269,36 @@ const customCategorySpecs: Array<{
   },
 ];
 
+const accountSpecs = [
+  {
+    key: "bank",
+    name: "HDFC Savings",
+    type: "bank",
+    openingBalance: 25_000,
+    institutionName: "HDFC Bank",
+    color: "#2563eb",
+    icon: "landmark",
+  },
+  {
+    key: "cash",
+    name: "Cash Wallet",
+    type: "cash",
+    openingBalance: 2_000,
+    institutionName: null,
+    color: "#16a34a",
+    icon: "wallet",
+  },
+  {
+    key: "card",
+    name: "ICICI Credit Card",
+    type: "credit_card",
+    openingBalance: 0,
+    institutionName: "ICICI Bank",
+    color: "#dc2626",
+    icon: "credit-card",
+  },
+] as const;
+
 const recentExpenses: Array<{
   hoursAgo: number;
   title: string;
@@ -315,45 +349,54 @@ const recentExpenses: Array<{
   },
 ];
 
-const fallbackSpend: Record<string, { title: string; description: string; amount: number; paymentMethod: PaymentMethod }> =
+const fallbackSpend: Record<
+  string,
   {
-    Housing: {
-      title: "House rent",
-      description: "Monthly rent paid to landlord",
-      amount: 12_000,
-      paymentMethod: "UPI",
-    },
-    "Food & Drinks": {
-      title: "Tea and snacks",
-      description: "Office canteen snacks",
-      amount: 180,
-      paymentMethod: "UPI",
-    },
-    Transportation: {
-      title: "Metro token",
-      description: "Single journey metro tokens",
-      amount: 60,
-      paymentMethod: "UPI",
-    },
-    Shopping: {
-      title: "Stationery",
-      description: "Notebooks and pens",
-      amount: 249,
-      paymentMethod: "CASH",
-    },
-    "Life & Entertainment": {
-      title: "Movie tickets",
-      description: "Weekend PVR tickets",
-      amount: 450,
-      paymentMethod: "DEBIT_CARD",
-    },
-  };
+    title: string;
+    description: string;
+    amount: number;
+    paymentMethod: PaymentMethod;
+  }
+> = {
+  Housing: {
+    title: "House rent",
+    description: "Monthly rent paid to landlord",
+    amount: 12_000,
+    paymentMethod: "UPI",
+  },
+  "Food & Drinks": {
+    title: "Tea and snacks",
+    description: "Office canteen snacks",
+    amount: 180,
+    paymentMethod: "UPI",
+  },
+  Transportation: {
+    title: "Metro token",
+    description: "Single journey metro tokens",
+    amount: 60,
+    paymentMethod: "UPI",
+  },
+  Shopping: {
+    title: "Stationery",
+    description: "Notebooks and pens",
+    amount: 249,
+    paymentMethod: "CASH",
+  },
+  "Life & Entertainment": {
+    title: "Movie tickets",
+    description: "Weekend PVR tickets",
+    amount: 450,
+    paymentMethod: "DEBIT_CARD",
+  },
+};
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
 
 const roundUpTo100 = (value: number) => Math.ceil(value / 100) * 100;
 
-const statusToBand = (status: ReturnType<typeof budgetUsage>["status"]): BudgetBand => {
+const statusToBand = (
+  status: ReturnType<typeof budgetUsage>["status"],
+): BudgetBand => {
   if (status === "exceeded") return "exceeded";
   if (status === "near_limit") return "warning";
   return "normal";
@@ -485,7 +528,9 @@ const seedDemo = async () => {
   const categories = await prisma.category.findMany({
     where: { isDefault: true, isArchived: false },
   });
-  const categoryByName = new Map(categories.map((category) => [category.name, category]));
+  const categoryByName = new Map(
+    categories.map((category) => [category.name, category]),
+  );
   const requireCategory = (name: string) => {
     const category = categoryByName.get(name);
     if (!category) {
@@ -589,18 +634,38 @@ const seedDemo = async () => {
     });
   }
 
-  const deletedTx = await prisma.transaction.deleteMany({ where: { userId: user.id } });
-  const deletedBudgets = await prisma.budget.deleteMany({ where: { userId: user.id } });
-  const deletedCustomCategories = await prisma.category.deleteMany({
-    where: {
-      userId: user.id,
-      isDefault: false,
-      OR: customCategorySpecs.map((spec) => ({
+  const deletedTx = await prisma.transaction.deleteMany({
+    where: { userId: user.id },
+  });
+  const deletedBudgets = await prisma.budget.deleteMany({
+    where: { userId: user.id },
+  });
+  const deletedCustomCategories = await prisma.financialAccount.deleteMany({
+    where: { userId: user.id, isDefault: false },
+  });
+
+  const accountIds: Record<string, string> = {};
+  for (const spec of accountSpecs) {
+    const created = await prisma.financialAccount.create({
+      data: {
+        userId: user.id,
         name: spec.name,
         type: spec.type,
-      })),
-    },
-  });
+        openingBalance: spec.openingBalance,
+        institutionName: spec.institutionName,
+        color: spec.color,
+        icon: spec.icon,
+      },
+    });
+    accountIds[spec.key] = created.id;
+  }
+
+  const accountIdFor = (paymentMethod: PaymentMethod) =>
+    paymentMethod === "CASH"
+      ? accountIds.cash!
+      : paymentMethod === "CREDIT_CARD"
+        ? accountIds.card!
+        : accountIds.bank!;
 
   const customCategories: Array<{
     spec: (typeof customCategorySpecs)[number];
@@ -636,6 +701,7 @@ const seedDemo = async () => {
     data: drafts.map((draft) => ({
       userId: user.id,
       categoryId: requireCategory(draft.categoryName).id,
+      accountId: accountIdFor(draft.paymentMethod),
       title: draft.title,
       amount: draft.amount,
       type: draft.type,
@@ -654,7 +720,9 @@ const seedDemo = async () => {
       type: "expense",
       date: { gte: currentStart, lt: currentEnd },
       categoryId: {
-        in: budgetTargets.map((target) => requireCategory(target.categoryName).id),
+        in: budgetTargets.map(
+          (target) => requireCategory(target.categoryName).id,
+        ),
       },
     },
     _sum: { amount: true },
@@ -692,7 +760,9 @@ const seedDemo = async () => {
   });
 
   const incomeCount = drafts.filter((draft) => draft.type === "income").length;
-  const expenseCount = drafts.filter((draft) => draft.type === "expense").length;
+  const expenseCount = drafts.filter(
+    (draft) => draft.type === "expense",
+  ).length;
 
   console.log(`Seeded existing user "${user.username}" (${user.id})`);
   console.log(
@@ -711,7 +781,9 @@ const seedDemo = async () => {
     const state = item.spec.archive ? "archived" : "active";
     console.log(`  ${item.category.name} (${item.category.type}, ${state})`);
   }
-  console.log(`Inserted ${budgets.length} budgets for ${current.year}-${String(current.month).padStart(2, "0")}:`);
+  console.log(
+    `Inserted ${budgets.length} budgets for ${current.year}-${String(current.month).padStart(2, "0")}:`,
+  );
   for (const budget of budgets) {
     console.log(
       `  ${budget.category.name}: limit ${budget.amount.toFixed(2)}, spent ${budget.spent.toFixed(2)} (${budget.percentageUsed}%, ${budget.band})`,
