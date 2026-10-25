@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import dotenv from "dotenv";
 
@@ -20,16 +21,18 @@ export const databaseNameFromUrl = (url: string): string => {
 };
 
 export const loadAndAssertTestDatabase = (): string => {
-  const result = dotenv.config({ path: TEST_ENV_PATH, override: true });
-  if (result.error) {
-    throw new Error(
-      `Could not load ${TEST_ENV_PATH}. Copy .env.test.example to .env.test and point DATABASE_URL at finance_test.`,
-    );
+  if (fs.existsSync(TEST_ENV_PATH)) {
+    const result = dotenv.config({ path: TEST_ENV_PATH, override: true });
+    if (result.error) {
+      throw new Error(`Could not load ${TEST_ENV_PATH}: ${result.error.message}`);
+    }
   }
 
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is not set in .env.test");
+    throw new Error(
+      "DATABASE_URL is not set. Copy .env.test.example to .env.test or set DATABASE_URL in the environment (database name must end with \"_test\").",
+    );
   }
 
   const name = databaseNameFromUrl(databaseUrl);
