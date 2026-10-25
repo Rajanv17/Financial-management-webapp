@@ -56,15 +56,20 @@ A full-stack personal financial application for tracking income and expenses, se
 Financial-management-webapp/
 ├── backend/              # Express API (routes, controllers, services, middleware)
 │   ├── prisma/           # Prisma schema and migrations
-│   ├── .env.example      # Environment variable names (no real values)
+│   ├── .env.example      # Local API env, including DATABASE_URL for finance_dev
 │   └── .env.test.example # Test database URL (name must end with _test)
 ├── frontend/             # React dashboard (shadcn/ui + Tailwind)
 │   └── .env.example      # VITE_API_URL
+├── docker/
+│   ├── postgres.env      # Local Postgres credentials (not for production)
+│   └── postgres/init/    # Creates finance_dev and finance_test on first start
+├── docker-compose.yml    # Local Postgres 16 only (the app is not containerised)
 ├── docs/screenshots/     # README screenshots
 ├── .github/
 │   └── workflows/        # CI pipeline (typecheck, lint, and tests on every push and PR)
 ├── .gitignore
 ├── LICENSE
+├── package.json          # db:up, db:down, db:reset
 └── README.md
 ```
 
@@ -76,7 +81,7 @@ Financial-management-webapp/
 
 - Node.js 20.19 or later (CI runs on Node.js 22)
 - npm
-- PostgreSQL 14 or later (local install, Docker, or a hosted instance)
+- Docker Engine with Compose V2 (for local Postgres). A native PostgreSQL 14+ install also works; see the note under step 2.
 
 ### 1. Clone the repository
 
@@ -85,11 +90,20 @@ git clone https://github.com/Rajanv17/Financial-management-webapp
 cd Financial-management-webapp
 ```
 
-### 2. Create the database
+### 2. Start Postgres
+
+From the repository root:
 
 ```bash
-createdb finance_app
+npm run db:up
 ```
+
+This starts a PostgreSQL 16 container, publishes it on `127.0.0.1:5433` (Postgres inside the container still uses 5432), and creates `finance_dev` (app) and `finance_test` (tests). Data is stored in a named Docker volume. Host port 5433 avoids clashing with a native Postgres on 5432.
+
+- `npm run db:down` stops the container and **keeps** the volume.
+- `npm run db:reset` is **destructive**: it removes the volume (all local Compose Postgres data) and starts a fresh container.
+
+If you skip Compose and use native Postgres, create the databases yourself (`createdb finance_dev` and `createdb finance_test`) and set `DATABASE_URL` to port `5432` with your local credentials.
 
 ### 3. Set up the backend
 
@@ -135,7 +149,7 @@ Copy `.env.example` to `.env` in each app folder and fill in the values. Never c
 | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_ENV`                                      | `development` or `production`                                                                                                    |
 | `PORT`                                          | Port the API listens on                                                                                                          |
-| `DATABASE_URL`                                  | PostgreSQL connection string, e.g. `postgresql://user:password@localhost:5432/finance_app`                                       |
+| `DATABASE_URL`                                  | PostgreSQL connection string, e.g. `postgresql://postgres:postgres@localhost:5433/finance_dev` (Compose host port)               |
 | `CORS_ORIGIN`                                   | Exact frontend origin allowed by CORS, e.g. `http://localhost:5173`                                                              |
 | `ACCESS_TOKEN_SECRET` / `ACCESS_TOKEN_EXPIRY`   | Secret and lifetime for access tokens (e.g. `1d`)                                                                                |
 | `REFRESH_TOKEN_SECRET` / `REFRESH_TOKEN_EXPIRY` | Secret and lifetime for refresh tokens (e.g. `7d`)                                                                               |
@@ -159,10 +173,11 @@ Copy `.env.example` to `.env` in each app folder and fill in the values. Never c
 Backend tests run with Vitest. From `backend/`:
 
 ```bash
-cp .env.test.example .env.test   # first time only; point DATABASE_URL at finance_test
-createdb finance_test            # if that database does not exist yet
+cp .env.test.example .env.test   # first time only; default URL is finance_test
 npm test
 ```
+
+`npm run db:up` already creates `finance_test`. If you use native Postgres instead, create that database yourself (`createdb finance_test`).
 
 Integration tests load `backend/.env.test` (not `.env`). The `DATABASE_URL` in that file must name a database whose name ends with `_test` (for example `finance_test`). The suite refuses to run against any other database.
 
@@ -184,7 +199,7 @@ Short notes on why things are built the way they are. This section grows as the 
 
 - **Branches:** `main` is protected and always deployable. New work happens on feature branches (for example `feat/budget-limits`) and merges through a pull request.
 - **Commits:** follow [Conventional Commits](https://www.conventionalcommits.org/), using `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, and `chore:`.
-- **CI:** every pull request and every push to `main` runs two GitHub Actions jobs. The backend job starts a PostgreSQL 16 service container, typechecks, and runs tests against a dedicated `finance_ci_test` database. The frontend job lints (warnings do not fail the job) and builds with `VITE_API_URL=/api/v1`.
+- **CI:** every pull request and every push to `main` runs two GitHub Actions jobs. The backend job starts a PostgreSQL 16 service container, typechecks, and runs tests against a dedicated `finance_test` database. The frontend job lints (warnings do not fail the job) and builds with `VITE_API_URL=/api/v1`.
 - **Deploy:** not automated yet.
 
 ---
