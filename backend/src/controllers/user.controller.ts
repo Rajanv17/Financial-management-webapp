@@ -63,6 +63,9 @@ const registerUser = async (req: Request, res: Response) => {
         username: normalizeIdentifier(username),
         email: normalizeIdentifier(email),
         passwordHash,
+        accounts: {
+          create: { name: "Unassigned", type: "other", isDefault: true },
+        },
       },
       select: publicUserSelect,
     });

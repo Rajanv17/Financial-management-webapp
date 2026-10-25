@@ -13,7 +13,8 @@
     "migrate:deploy": "prisma migrate deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:db:migrate": "tsx src/scripts/migrateTestDb.ts"
   },
   "keywords": [],
   "author": "",

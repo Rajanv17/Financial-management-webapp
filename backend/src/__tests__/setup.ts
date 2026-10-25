@@ -1,26 +1,8 @@
 import { execSync } from "node:child_process";
-import path from "node:path";
 import { afterAll, beforeEach } from "vitest";
-import dotenv from "dotenv";
+import { loadAndAssertTestDatabase } from "../scripts/assertTestDatabase";
 
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
-
-const testDatabaseUrl = process.env.TEST_DATABASE_URL?.trim();
-const databaseUrl = process.env.DATABASE_URL?.trim();
-
-if (!testDatabaseUrl) {
-  throw new Error(
-    "TEST_DATABASE_URL is not set. Integration tests need a separate Postgres database.",
-  );
-}
-
-if (testDatabaseUrl === databaseUrl) {
-  throw new Error(
-    "TEST_DATABASE_URL must differ from DATABASE_URL so tests never touch the development database.",
-  );
-}
-
-process.env.DATABASE_URL = testDatabaseUrl;
+const testDatabaseUrl = loadAndAssertTestDatabase();
 process.env.AUTH_RATE_LIMIT_MAX = "10000";
 
 execSync("npx prisma migrate deploy", {
@@ -46,6 +28,7 @@ await seedDefaultCategories();
 beforeEach(async () => {
   await prisma.transaction.deleteMany();
   await prisma.budget.deleteMany();
+  await prisma.financialAccount.deleteMany();
   await prisma.category.deleteMany({ where: { isDefault: false } });
   await prisma.user.deleteMany();
   await seedDefaultCategories();

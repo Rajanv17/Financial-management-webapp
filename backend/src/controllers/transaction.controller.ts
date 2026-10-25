@@ -28,6 +28,13 @@ const CATEGORY_SELECT = {
   color: true,
   type: true,
 } as const;
+const ACCOUNT_SELECT = {
+  id: true,
+  name: true,
+  type: true,
+  icon: true,
+  color: true,
+} as const;
 
 const requireUserId = (req: AuthenticatedRequest): string => {
   const userId = req.user?.id;
@@ -53,6 +60,18 @@ const assertUsableCategory = async (userId: string, categoryId: string) => {
   return category;
 };
 
+const assertUsableAccount = async (userId: string, accountId: string) => {
+  const account = await prisma.financialAccount.findFirst({
+    where: { id: accountId, userId, isArchived: false },
+  });
+
+  if (!account) {
+    throw new ApiError(400, "Invalid or archived account");
+  }
+
+  return account;
+};
+
 const assertTypeMatchesCategory = (
   type: TransactionType,
   categoryType: TransactionType,
@@ -70,6 +89,7 @@ const createTransaction = async (req: AuthenticatedRequest, res: Response) => {
   const amount = parseAmount(body.amount);
   const type = parseEnum(body.type, TRANSACTION_TYPES, "Type");
   const categoryId = requireId(body.categoryId, "categoryId");
+  const accountId = requireId(body.accountId, "accountId");
   const date = body.date ? parseDate(body.date) : new Date();
   const description = optionalString(body.description, "Description", 150);
   const paymentMethod = body.paymentMethod
@@ -78,6 +98,7 @@ const createTransaction = async (req: AuthenticatedRequest, res: Response) => {
 
   const category = await assertUsableCategory(userId, categoryId);
   assertTypeMatchesCategory(type, category.type);
+  await assertUsableAccount(userId, accountId);
 
   const transaction = await prisma.transaction.create({
     data: {
@@ -87,6 +108,7 @@ const createTransaction = async (req: AuthenticatedRequest, res: Response) => {
       type,
       date,
       categoryId,
+      accountId,
       description,
       paymentMethod,
     },
@@ -109,9 +131,14 @@ const fetchTransactions = async (req: AuthenticatedRequest, res: Response) => {
 
   const pageValue = optionalQueryString(query.page, "page");
   const limitValue = optionalQueryString(query.limit, "limit");
-  const page = pageValue === undefined ? 1 : parseIntInRange(pageValue, "page", 1, 1_000_000);
+  const page =
+    pageValue === undefined
+      ? 1
+      : parseIntInRange(pageValue, "page", 1, 1_000_000);
   const limit =
-    limitValue === undefined ? 20 : parseIntInRange(limitValue, "limit", 1, 100);
+    limitValue === undefined
+      ? 20
+      : parseIntInRange(limitValue, "limit", 1, 100);
 
   const typeValue = optionalQueryString(query.type, "type");
   const type =
@@ -124,6 +151,12 @@ const fetchTransactions = async (req: AuthenticatedRequest, res: Response) => {
     categoryIdValue === undefined
       ? undefined
       : requireId(categoryIdValue, "categoryId");
+
+  const accountIdValue = optionalQueryString(query.accountId, "accountId");
+  const accountId =
+    accountIdValue === undefined
+      ? undefined
+      : requireId(accountIdValue, "accountId");
 
   const fromValue = optionalQueryString(query.from, "from");
   const toValue = optionalQueryString(query.to, "to");
@@ -159,6 +192,7 @@ const fetchTransactions = async (req: AuthenticatedRequest, res: Response) => {
     userId,
     ...(type && { type }),
     ...(categoryId && { categoryId }),
+    ...(accountId && { accountId }),
     ...(from || to
       ? { date: { ...(from && { gte: from }), ...(to && { lte: to }) } }
       : {}),
@@ -179,7 +213,10 @@ const fetchTransactions = async (req: AuthenticatedRequest, res: Response) => {
       orderBy: { [sortBy]: sortOrder },
       skip: (page - 1) * limit,
       take: limit,
-      include: { category: { select: CATEGORY_SELECT } },
+      include: {
+        category: { select: CATEGORY_SELECT },
+        account: { select: ACCOUNT_SELECT },
+      },
     }),
   ]);
 
@@ -225,6 +262,9 @@ const updateTransaction = async (req: AuthenticatedRequest, res: Response) => {
     ...(body.categoryId !== undefined && {
       categoryId: requireId(body.categoryId, "categoryId"),
     }),
+    ...(body.accountId !== undefined && {
+      accountId: requireId(body.accountId, "accountId"),
+    }),
     ...(body.description !== undefined && {
       description: optionalString(body.description, "Description", 150),
     }),
@@ -260,6 +300,10 @@ const updateTransaction = async (req: AuthenticatedRequest, res: Response) => {
     }
 
     assertTypeMatchesCategory(nextType, category.type);
+  }
+
+  if (data.accountId && data.accountId !== existingTransaction.accountId) {
+    await assertUsableAccount(userId, data.accountId);
   }
 
   const transaction = await prisma.transaction.update({

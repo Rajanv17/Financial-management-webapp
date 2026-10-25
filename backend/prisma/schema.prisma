@@ -27,6 +27,14 @@ enum BudgetPeriod {
   yearly
 }
 
+enum AccountType {
+  bank
+  cash
+  wallet
+  credit_card
+  other
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   username     String   @unique @db.VarChar(50)
@@ -39,6 +47,7 @@ model User {
   categories   Category[]
   transactions Transaction[]
   budgets      Budget[]
+  accounts     FinancialAccount[]
 
   @@map("users")
 }
@@ -75,14 +84,17 @@ model Transaction {
   date          DateTime        @default(now()) @db.Timestamptz(3)
   description   String?         @db.VarChar(150)
   paymentMethod PaymentMethod?  @default(CASH) @map("payment_method")
+  accountId     String          @map("account_id") @db.Uuid
   createdAt     DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt     DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  account  FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
 
   @@index([userId, date(sort: Desc)])
   @@index([userId, categoryId, date])
+  @@index([userId, accountId, date])
   @@map("transactions")
 }
 
@@ -107,4 +119,28 @@ model Budget {
   // (user_id, category_id, month, year) WHERE is_archived = false.
   @@index([userId, year, month])
   @@map("budgets")
+}
+
+model FinancialAccount {
+  id              String      @id @default(uuid()) @db.Uuid
+  userId          String      @map("user_id") @db.Uuid
+  name            String      @db.VarChar(50)
+  type            AccountType
+  openingBalance  Decimal     @default(0) @map("opening_balance") @db.Decimal(12, 2)
+  currency        String      @default("INR") @db.VarChar(3)
+  institutionName String?     @map("institution_name") @db.VarChar(100)
+  color           String?     @db.VarChar(9)
+  icon            String?     @db.VarChar(50)
+  isDefault       Boolean     @default(false) @map("is_default")
+  isArchived      Boolean     @default(false) @map("is_archived")
+  archivedAt      DateTime?   @map("archived_at") @db.Timestamptz(3)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("financial_accounts")
 }

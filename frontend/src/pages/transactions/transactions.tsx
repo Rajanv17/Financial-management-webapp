@@ -1,14 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 import {
   ConfirmDialog,
   EmptyState,
   ErrorState,
-  Money,
   PageHeader,
-  StatusBadge,
   TableSkeleton,
 } from "@/components/shared";
 import { Button } from "@/components/ui/button";
@@ -24,6 +22,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { fetchAccounts } from "@/features/accounts/api";
+import { writeLastAccountId } from "@/features/accounts/last-account";
+import type { Account } from "@/features/accounts/types";
 import { fetchCategories } from "@/features/categories/api";
 import type { Category } from "@/features/categories/types";
 import {
@@ -33,30 +34,45 @@ import {
   updateTransaction,
   type TransactionListParams,
 } from "@/features/transactions/api";
-import {
-  PAYMENT_METHOD_LABELS,
-  type Transaction,
-  type TransactionWritePayload,
-} from "@/features/transactions/types";
+import { invalidateAfterTransactionChange } from "@/features/transactions/invalidate";
+import type { Transaction, TransactionWritePayload } from "@/features/transactions/types";
 import { ApiClientError } from "@/lib/api";
 import { queryKeys } from "@/lib/query-keys";
-import { DataTable } from "./data-table";
-import { TransactionFormDialog } from "./transaction-form-dialog";
-import { createTransactionColumns } from "./transactions-columns";
+import {
+  TransactionFormDialog,
+  type TransactionAccountOption,
+} from "./transaction-form-dialog";
+import { TransactionResults } from "./transaction-results";
 
 const PAGE_SIZE = 20;
-
-const formatDate = (iso: string) =>
-  new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(iso));
 
 const groupedCategories = (categories: Category[]) => ({
   expense: categories.filter((category) => category.type === "expense"),
   income: categories.filter((category) => category.type === "income"),
 });
+
+const toAccountOption = (account: Account): TransactionAccountOption => ({
+  id: account.id,
+  name: account.name,
+  isArchived: account.isArchived,
+  isDefault: account.isDefault,
+});
+
+const formAccountOptions = (
+  active: Account[],
+  editing: Transaction | null,
+): TransactionAccountOption[] => {
+  const options = active.map(toAccountOption);
+  if (editing && !options.some((account) => account.id === editing.accountId)) {
+    options.push({
+      id: editing.accountId,
+      name: editing.account?.name ?? "Archived account",
+      isArchived: true,
+      isDefault: false,
+    });
+  }
+  return options;
+};
 
 export default function TransactionsPage() {
   const queryClient = useQueryClient();
@@ -64,6 +80,7 @@ export default function TransactionsPage() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [type, setType] = useState<"all" | "income" | "expense">("all");
   const [categoryId, setCategoryId] = useState("all");
+  const [accountId, setAccountId] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
@@ -80,13 +97,19 @@ export default function TransactionsPage() {
   }, [searchInput]);
 
   const filtersActive =
-    debouncedQ !== "" || type !== "all" || categoryId !== "all" || from !== "" || to !== "";
+    debouncedQ !== "" ||
+    type !== "all" ||
+    categoryId !== "all" ||
+    accountId !== "all" ||
+    from !== "" ||
+    to !== "";
 
   const listParams: TransactionListParams = {
     page,
     limit: PAGE_SIZE,
     ...(type !== "all" ? { type } : {}),
     ...(categoryId !== "all" ? { categoryId } : {}),
+    ...(accountId !== "all" ? { accountId } : {}),
     ...(from ? { from } : {}),
     ...(to ? { to } : {}),
     ...(debouncedQ ? { q: debouncedQ } : {}),
@@ -104,27 +127,62 @@ export default function TransactionsPage() {
     queryFn: () => fetchCategories(false),
   });
 
+  const activeAccountsQuery = useQuery({
+    queryKey: queryKeys.accounts.list(false),
+    queryFn: () => fetchAccounts(false),
+  });
+
+  const activeAccounts = activeAccountsQuery.data ?? [];
+  const filterNeedsArchived =
+    accountId !== "all" &&
+    !(activeAccountsQuery.data ?? []).some((account) => account.id === accountId);
+
+  const archivedAccountsQuery = useQuery({
+    queryKey: queryKeys.accounts.list(true),
+    queryFn: () => fetchAccounts(true),
+    enabled: filterNeedsArchived,
+  });
+
   const categories = categoriesQuery.data ?? [];
   const grouped = groupedCategories(
     type === "all" ? categories : categories.filter((category) => category.type === type),
   );
 
-  const invalidateRelated = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
-    ]);
+  const filterAccounts = useMemo(() => {
+    const active = activeAccountsQuery.data ?? [];
+    const options = active.map(toAccountOption);
+    if (
+      accountId !== "all" &&
+      !active.some((account) => account.id === accountId)
+    ) {
+      const archived = (archivedAccountsQuery.data ?? []).find(
+        (account) => account.id === accountId,
+      );
+      if (archived) {
+        options.push(toAccountOption(archived));
+      }
+    }
+    return options;
+  }, [accountId, activeAccountsQuery.data, archivedAccountsQuery.data]);
 
   const saveMutation = useMutation({
     mutationFn: async (payload: TransactionWritePayload) => {
       if (editing) {
-        return updateTransaction(editing.id, payload);
+        const { accountId: nextAccountId, ...rest } = payload;
+        return updateTransaction(editing.id, {
+          ...rest,
+          ...(nextAccountId !== editing.accountId
+            ? { accountId: nextAccountId }
+            : {}),
+        });
       }
       return createTransaction(payload);
     },
-    onSuccess: async () => {
-      await invalidateRelated();
+    onSuccess: async (_data, payload) => {
+      if (!editing) {
+        writeLastAccountId(payload.accountId);
+      }
+      await invalidateAfterTransactionChange(queryClient);
       toast.success(editing ? "Transaction updated" : "Transaction added");
       setFormOpen(false);
       setEditing(null);
@@ -134,7 +192,7 @@ export default function TransactionsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteTransaction(id),
     onSuccess: async () => {
-      await invalidateRelated();
+      await invalidateAfterTransactionChange(queryClient);
       toast.success("Transaction deleted");
       setDeleting(null);
     },
@@ -147,23 +205,12 @@ export default function TransactionsPage() {
     },
   });
 
-  const columns = useMemo(
-    () =>
-      createTransactionColumns({
-        onEdit: (transaction) => {
-          setEditing(transaction);
-          setFormOpen(true);
-        },
-        onDelete: setDeleting,
-      }),
-    [],
-  );
-
   const clearFilters = () => {
     setSearchInput("");
     setDebouncedQ("");
     setType("all");
     setCategoryId("all");
+    setAccountId("all");
     setFrom("");
     setTo("");
     setPage(1);
@@ -252,6 +299,25 @@ export default function TransactionsPage() {
             ) : null}
           </SelectContent>
         </Select>
+        <Select
+          value={accountId}
+          onValueChange={(value) => {
+            setAccountId(value);
+            setPage(1);
+          }}
+        >
+          <SelectTrigger className="w-full lg:w-56" aria-label="Account">
+            <SelectValue placeholder="All accounts" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All accounts</SelectItem>
+            {filterAccounts.map((account) => (
+              <SelectItem key={account.id} value={account.id}>
+                {account.isArchived ? `${account.name} (archived)` : account.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className="flex flex-col gap-1">
           <Label htmlFor="from-date" className="text-xs text-muted-foreground">
             From
@@ -332,106 +398,16 @@ export default function TransactionsPage() {
       ) : null}
 
       {transactionsQuery.isSuccess && items.length > 0 ? (
-        <>
-          <div className="space-y-3 md:hidden">
-            {items.map((transaction) => (
-              <article
-                key={transaction.id}
-                className="space-y-3 rounded-xl border border-border bg-card p-4"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="font-medium text-foreground">{transaction.title}</p>
-                    {transaction.description ? (
-                      <p className="text-sm text-muted-foreground">
-                        {transaction.description}
-                      </p>
-                    ) : null}
-                  </div>
-                  <Money amount={transaction.amount} type={transaction.type} />
-                </div>
-                <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                  <span className="tabular-nums">{formatDate(transaction.date)}</span>
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className="size-2.5 rounded-full bg-muted-foreground"
-                      style={
-                        transaction.category?.color
-                          ? { backgroundColor: transaction.category.color }
-                          : undefined
-                      }
-                    />
-                    {transaction.category?.name ?? "—"}
-                  </span>
-                  <span>
-                    {transaction.paymentMethod
-                      ? PAYMENT_METHOD_LABELS[transaction.paymentMethod]
-                      : "—"}
-                  </span>
-                  <StatusBadge
-                    label={transaction.type === "income" ? "Income" : "Expense"}
-                    tone={transaction.type}
-                  />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setEditing(transaction);
-                      setFormOpen(true);
-                    }}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setDeleting(transaction)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </article>
-            ))}
-          </div>
-
-          <div className="hidden md:block">
-            <DataTable columns={columns} data={items} />
-          </div>
-
-          {pagination && pagination.totalPages > 1 ? (
-            <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <p>
-                Page {pagination.page} of {pagination.totalPages}
-              </p>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={pagination.page <= 1}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                >
-                  <ChevronLeft />
-                  Previous
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={pagination.page >= pagination.totalPages}
-                  onClick={() => setPage((current) => current + 1)}
-                >
-                  Next
-                  <ChevronRight />
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </>
+        <TransactionResults
+          items={items}
+          pagination={pagination}
+          onPageChange={setPage}
+          onEdit={(transaction) => {
+            setEditing(transaction);
+            setFormOpen(true);
+          }}
+          onDelete={setDeleting}
+        />
       ) : null}
 
       <TransactionFormDialog
@@ -439,6 +415,7 @@ export default function TransactionsPage() {
         open={formOpen}
         transaction={editing}
         categories={categories}
+        accounts={formAccountOptions(activeAccounts, editing)}
         pending={saveMutation.isPending}
         onOpenChange={(open) => {
           setFormOpen(open);

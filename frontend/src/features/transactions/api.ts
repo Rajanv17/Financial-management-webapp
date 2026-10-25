@@ -1,11 +1,17 @@
 import { api } from "@/lib/api";
-import type { Transaction, TransactionList, TransactionWritePayload } from "./types";
+import type {
+  Transaction,
+  TransactionList,
+  TransactionUpdatePayload,
+  TransactionWritePayload,
+} from "./types";
 
 export type TransactionListParams = {
   page?: number;
   limit?: number;
   type?: "income" | "expense";
   categoryId?: string;
+  accountId?: string;
   from?: string;
   to?: string;
   q?: string;
@@ -33,7 +39,7 @@ export const createTransaction = (input: TransactionWritePayload) =>
     body: JSON.stringify(input),
   });
 
-export const updateTransaction = (id: string, input: TransactionWritePayload) =>
+export const updateTransaction = (id: string, input: TransactionUpdatePayload) =>
   api<Transaction>(`/transactions/${id}`, {
     method: "PATCH",
     body: JSON.stringify(input),

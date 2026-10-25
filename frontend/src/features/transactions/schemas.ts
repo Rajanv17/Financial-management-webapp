@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { accountTypeSchema } from "../accounts/schemas";
 import { categorySchema, transactionTypeSchema } from "../categories/schemas";
 
 export const paymentMethodSchema = z.enum([
@@ -18,10 +19,19 @@ export const categoryEmbedSchema = categorySchema.pick({
   type: true,
 });
 
+export const accountEmbedSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: accountTypeSchema,
+  icon: z.string().nullable(),
+  color: z.string().nullable(),
+});
+
 export const transactionSchema = z.object({
   id: z.string(),
   userId: z.string(),
   categoryId: z.string(),
+  accountId: z.string(),
   title: z.string(),
   amount: z.number(),
   type: transactionTypeSchema,
@@ -31,6 +41,7 @@ export const transactionSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   category: categoryEmbedSchema.optional(),
+  account: accountEmbedSchema.optional(),
 });
 
 export const transactionListSchema = z.object({
@@ -53,6 +64,7 @@ export const transactionFormSchema = z.object({
     .refine((value) => Number(value) > 0, "Amount must be greater than zero"),
   date: z.string().min(1, "Date is required"),
   categoryId: z.uuid("Choose a category"),
+  accountId: z.uuid("Choose an account"),
   paymentMethod: paymentMethodSchema,
   description: z.string().max(150, "Description must be at most 150 characters"),
   title: z.string().trim().min(1, "Title is required").max(100),

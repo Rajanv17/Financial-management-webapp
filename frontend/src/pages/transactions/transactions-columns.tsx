@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import { Money } from "@/components/shared/money";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
+import { AccountBadge } from "@/features/accounts/account-badge";
 import {
   PAYMENT_METHOD_LABELS,
   type Transaction,
@@ -63,6 +64,15 @@ export const createTransactionColumns = ({
           <span>{category?.name ?? "—"}</span>
         </div>
       );
+    },
+  },
+  {
+    id: "account",
+    header: "Account",
+    cell: ({ row }) => {
+      const account = row.original.account;
+      if (!account) return "—";
+      return <AccountBadge name={account.name} color={account.color} />;
     },
   },
   {

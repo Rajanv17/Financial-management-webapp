@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   ArrowLeftRight,
+  Landmark,
   Wallet,
   RefreshCw,
   TrendingUp,
@@ -25,6 +26,11 @@ export const sidebarItems = [
     label: "Categories",
     icon: Tag,
     path: "/dashboard/categories",
+  },
+  {
+    label: "Accounts",
+    icon: Landmark,
+    path: "/dashboard/accounts",
   },
   {
     label: "Budget",

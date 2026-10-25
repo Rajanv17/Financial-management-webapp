@@ -13,6 +13,16 @@ export type Category = {
   color: string | null;
 };
 
+export type Account = {
+  id: string;
+  name: string;
+  type: string;
+  isDefault: boolean;
+  isArchived: boolean;
+  openingBalance: string | number;
+  balance: string;
+};
+
 const setCookieHeaders = (res: request.Response): string[] => {
   const header = res.headers["set-cookie"];
   if (!header) return [];
@@ -40,6 +50,7 @@ export const authedClient = (loginRes: request.Response) => {
   return {
     get: (url: string) => withCookie(api().get(url)),
     post: (url: string) => withCookie(api().post(url)),
+    put: (url: string) => withCookie(api().put(url)),
     patch: (url: string) => withCookie(api().patch(url)),
     delete: (url: string) => withCookie(api().delete(url)),
   };
@@ -92,4 +103,38 @@ export const defaultCategories = async (client: AuthedClient) => {
     throw new Error("Default expense and income categories are required");
   }
   return { categories, expense, income };
+};
+
+export const listAccounts = async (
+  client: AuthedClient,
+  query?: Record<string, string>,
+) => {
+  const res = await client.get("/api/v1/accounts").query(query ?? {});
+  expect(res.status).toBe(200);
+  return res.body.data as Account[];
+};
+
+export const defaultAccount = async (client: AuthedClient) => {
+  const accounts = await listAccounts(client);
+  const account = accounts.find(
+    (row) => row.isDefault && row.name === "Unassigned",
+  );
+  if (!account) {
+    throw new Error("Default Unassigned account is required");
+  }
+  return account;
+};
+
+export const createAccount = async (
+  client: AuthedClient,
+  overrides?: Record<string, unknown>,
+) => {
+  const res = await client.post("/api/v1/accounts").send({
+    name: "Checking",
+    type: "bank",
+    openingBalance: "0",
+    ...overrides,
+  });
+  expect(res.status).toBe(201);
+  return res.body.data as Account;
 };

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { defaultCategories, registerAndLogin } from "./helpers";
+import { defaultAccount, defaultCategories, registerAndLogin } from "./helpers";
 
 describe("dashboard", () => {
   it("GET /dashboard/summary matches hand-computed totals for a fixed dataset", async () => {
     const { client } = await registerAndLogin();
     const { expense, income, categories } = await defaultCategories(client);
+    const account = await defaultAccount(client);
     const shopping = categories.find(
       (category) => category.name === "Shopping" && category.type === "expense",
     );
@@ -22,6 +23,7 @@ describe("dashboard", () => {
       amount: 1000,
       type: "income",
       categoryId: income.id,
+      accountId: account.id,
       date: "2026-01-05T12:00:00.000Z",
     });
     await createTx({
@@ -29,6 +31,7 @@ describe("dashboard", () => {
       amount: 100,
       type: "expense",
       categoryId: expense.id,
+      accountId: account.id,
       date: "2026-01-10T12:00:00.000Z",
     });
     await createTx({
@@ -36,6 +39,7 @@ describe("dashboard", () => {
       amount: 50,
       type: "expense",
       categoryId: shopping.id,
+      accountId: account.id,
       date: "2026-01-20T12:00:00.000Z",
     });
     await createTx({
@@ -43,6 +47,7 @@ describe("dashboard", () => {
       amount: 200,
       type: "expense",
       categoryId: expense.id,
+      accountId: account.id,
       date: "2026-02-08T12:00:00.000Z",
     });
     await createTx({
@@ -50,6 +55,7 @@ describe("dashboard", () => {
       amount: 9999,
       type: "expense",
       categoryId: expense.id,
+      accountId: account.id,
       date: "2025-12-31T12:00:00.000Z",
     });
 

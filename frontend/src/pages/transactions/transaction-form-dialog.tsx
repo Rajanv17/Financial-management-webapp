@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check } from "lucide-react";
@@ -29,6 +29,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { defaultCreateAccountId } from "@/features/accounts/last-account";
+import type { Account } from "@/features/accounts/types";
 import type { Category } from "@/features/categories/types";
 import { transactionFormSchema } from "@/features/transactions/schemas";
 import {
@@ -49,11 +51,12 @@ const todayInputValue = () => {
   return `${now.getFullYear()}-${month}-${day}`;
 };
 
-const emptyValues = (): TransactionFormValues => ({
+const emptyValues = (accountId: string): TransactionFormValues => ({
   type: "expense",
   amount: "",
   date: todayInputValue(),
   categoryId: "",
+  accountId,
   paymentMethod: "CASH",
   description: "",
   title: "",
@@ -64,6 +67,7 @@ const valuesFromTransaction = (transaction: Transaction): TransactionFormValues 
   amount: String(transaction.amount),
   date: transaction.date.slice(0, 10),
   categoryId: transaction.categoryId,
+  accountId: transaction.accountId,
   paymentMethod: transaction.paymentMethod ?? "CASH",
   description: transaction.description ?? "",
   title: transaction.title,
@@ -74,15 +78,22 @@ const toPayload = (values: TransactionFormValues): TransactionWritePayload => ({
   amount: Number(values.amount),
   date: `${values.date}T00:00:00.000Z`,
   categoryId: values.categoryId,
+  accountId: values.accountId,
   paymentMethod: values.paymentMethod,
   description: values.description.trim() === "" ? null : values.description.trim(),
   title: values.title.trim(),
 });
 
+export type TransactionAccountOption = Pick<
+  Account,
+  "id" | "name" | "isArchived" | "isDefault"
+>;
+
 type TransactionFormDialogProps = {
   open: boolean;
   transaction: Transaction | null;
   categories: Category[];
+  accounts: TransactionAccountOption[];
   pending: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (payload: TransactionWritePayload) => Promise<void>;
@@ -92,6 +103,7 @@ export function TransactionFormDialog({
   open,
   transaction,
   categories,
+  accounts,
   pending,
   onOpenChange,
   onSubmit,
@@ -99,15 +111,24 @@ export function TransactionFormDialog({
   const isMobile = useIsMobile();
   const triggerRef = useRef<HTMLElement | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const initialAccountId = transaction
+    ? transaction.accountId
+    : defaultCreateAccountId(accounts);
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionFormSchema),
-    defaultValues: transaction ? valuesFromTransaction(transaction) : emptyValues(),
+    defaultValues: transaction
+      ? valuesFromTransaction(transaction)
+      : emptyValues(initialAccountId),
   });
 
   const selectedType = useWatch({ control: form.control, name: "type" });
   const selectedCategoryId = useWatch({
     control: form.control,
     name: "categoryId",
+  });
+  const selectedAccountId = useWatch({
+    control: form.control,
+    name: "accountId",
   });
   const selectedPaymentMethod = useWatch({
     control: form.control,
@@ -126,6 +147,16 @@ export function TransactionFormDialog({
       triggerRef.current = active;
     }
   }, [open]);
+
+  useEffect(() => {
+    if (transaction) return;
+    const current = form.getValues("accountId");
+    if (current) return;
+    const next = defaultCreateAccountId(accounts);
+    if (next) {
+      form.setValue("accountId", next);
+    }
+  }, [accounts, form, transaction]);
 
   const restoreTriggerFocus = () => {
     triggerRef.current?.focus();
@@ -282,7 +313,12 @@ export function TransactionFormDialog({
         <Label htmlFor="transaction-category">Category</Label>
         <Select
           value={selectedCategoryId || undefined}
-          onValueChange={(value) => form.setValue("categoryId", value)}
+          onValueChange={(value) =>
+            form.setValue("categoryId", value, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
         >
           <SelectTrigger
             id="transaction-category"
@@ -307,6 +343,44 @@ export function TransactionFormDialog({
         {form.formState.errors.categoryId ? (
           <p id="transaction-category-error" className="text-sm text-destructive">
             {form.formState.errors.categoryId.message}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="transaction-account">Account</Label>
+        <Select
+          value={selectedAccountId || undefined}
+          onValueChange={(value) =>
+            form.setValue("accountId", value, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+          }
+        >
+          <SelectTrigger
+            id="transaction-account"
+            className="w-full"
+            aria-invalid={!!form.formState.errors.accountId}
+            aria-describedby={
+              form.formState.errors.accountId
+                ? "transaction-account-error"
+                : undefined
+            }
+          >
+            <SelectValue placeholder="Select an account" />
+          </SelectTrigger>
+          <SelectContent>
+            {accounts.map((account) => (
+              <SelectItem key={account.id} value={account.id}>
+                {account.isArchived ? `${account.name} (archived)` : account.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {form.formState.errors.accountId ? (
+          <p id="transaction-account-error" className="text-sm text-destructive">
+            {form.formState.errors.accountId.message}
           </p>
         ) : null}
       </div>

@@ -16,9 +16,14 @@ export type TransactionWritePayload = {
   amount: number;
   type: "income" | "expense";
   categoryId: string;
+  accountId: string;
   date: string;
   description: string | null;
   paymentMethod: PaymentMethod;
+};
+
+export type TransactionUpdatePayload = Omit<TransactionWritePayload, "accountId"> & {
+  accountId?: string;
 };
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
