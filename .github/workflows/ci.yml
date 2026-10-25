@@ -26,22 +26,28 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: finance_ci
+          POSTGRES_DB: finance_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres -d finance_ci"
+          --health-cmd "pg_isready -U postgres -d finance_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
 
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/finance_ci
-      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/finance_ci_test
+      NODE_ENV: test
+      PORT: 8000
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/finance_test
+      CORS_ORIGIN: http://localhost:5173
       ACCESS_TOKEN_SECRET: ci-access-token-secret
       ACCESS_TOKEN_EXPIRY: 1d
       REFRESH_TOKEN_SECRET: ci-refresh-token-secret
       REFRESH_TOKEN_EXPIRY: 7d
+      COOKIE_SAMESITE: lax
+      TRUST_PROXY: "false"
+      AUTH_RATE_LIMIT_MAX: 10000
+      AUTH_RATE_LIMIT_WINDOW_MS: 900000
 
     steps:
       - name: Checkout
@@ -50,7 +56,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "20"
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -60,27 +66,10 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
-      - name: Create test database
-        run: |
-          node <<'EOF'
-          const { Client } = require("pg");
-          (async () => {
-            const client = new Client({ connectionString: process.env.DATABASE_URL });
-            await client.connect();
-            const { rows } = await client.query(
-              "SELECT 1 FROM pg_database WHERE datname = 'finance_ci_test'",
-            );
-            if (rows.length === 0) {
-              await client.query("CREATE DATABASE finance_ci_test");
-            }
-            await client.end();
-          })().catch((err) => {
-            console.error(err);
-            process.exit(1);
-          });
-          EOF
+      - name: Migrate test database
+        run: npm run test:db:migrate
 
-      - name: Typecheck
+      - name: Lint
         run: npm run typecheck
 
       - name: Test
