@@ -11,6 +11,7 @@ import InvestmentsPage from "./pages/investments";
 import AnalyticsPage from "./pages/analytics";
 import ProfilePage from "./pages/profile";
 import CategoriesPage from "./pages/categories";
+import AccountsPage from "./pages/accounts";
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
           <Route index element={<OverviewPage />} />
           <Route path="transactions" element={<TransactionsPage />} />
           <Route path="categories" element={<CategoriesPage />} />
+          <Route path="accounts" element={<AccountsPage />} />
           <Route path="budget" element={<BudgetPage />} />
           <Route path="recurring" element={<RecurringPage />} />
           <Route path="investments" element={<InvestmentsPage />} />

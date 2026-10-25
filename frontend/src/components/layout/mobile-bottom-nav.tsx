@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import {
   ArrowLeftRight,
   BarChart3,
+  Landmark,
   LayoutDashboard,
   LogOut,
   MoreHorizontal,
@@ -50,6 +51,11 @@ const MORE_ITEMS = [
     label: "Categories",
     icon: Tag,
     path: "/dashboard/categories",
+  },
+  {
+    label: "Accounts",
+    icon: Landmark,
+    path: "/dashboard/accounts",
   },
   {
     label: "Recurring",
