@@ -54,6 +54,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/features/auth/auth-provider";
 import { createBudget, fetchBudgetSummary, fetchBudgets } from "@/features/budgets/api";
 import type { BudgetWritePayload } from "@/features/budgets/types";
+import { fetchAccounts } from "@/features/accounts/api";
+import { writeLastAccountId } from "@/features/accounts/last-account";
 import { fetchCategories } from "@/features/categories/api";
 import { fetchDashboardSummary } from "@/features/dashboard/api";
 import {
@@ -62,6 +64,7 @@ import {
   periodRange,
 } from "@/features/dashboard/period";
 import type { PeriodId } from "@/features/dashboard/types";
+import { invalidateAfterTransactionChange } from "@/features/transactions/invalidate";
 import { createTransaction, fetchTransactions } from "@/features/transactions/api";
 import type { TransactionWritePayload } from "@/features/transactions/types";
 import { TransactionFormDialog } from "@/pages/transactions/transaction-form-dialog";
@@ -264,17 +267,16 @@ export default function OverviewPage() {
     queryFn: () => fetchCategories(false),
   });
 
-  const invalidateRelated = () =>
-    Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
-    ]);
+  const activeAccountsQuery = useQuery({
+    queryKey: queryKeys.accounts.list(false),
+    queryFn: () => fetchAccounts(false),
+  });
 
   const createTransactionMutation = useMutation({
     mutationFn: (payload: TransactionWritePayload) => createTransaction(payload),
-    onSuccess: async () => {
-      await invalidateRelated();
+    onSuccess: async (_data, payload) => {
+      writeLastAccountId(payload.accountId);
+      await invalidateAfterTransactionChange(queryClient);
       toast.success("Transaction added");
       setTransactionOpen(false);
     },
@@ -283,7 +285,11 @@ export default function OverviewPage() {
   const createBudgetMutation = useMutation({
     mutationFn: (payload: BudgetWritePayload) => createBudget(payload),
     onSuccess: async () => {
-      await invalidateRelated();
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.transactions.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
+      ]);
       toast.success("Budget created");
       setBudgetOpen(false);
     },
@@ -292,6 +298,7 @@ export default function OverviewPage() {
   const summary = summaryQuery.data;
   const recent = recentQuery.data;
   const categories = categoriesQuery.data ?? [];
+  const activeAccounts = activeAccountsQuery.data ?? [];
   const isNewUser = recentQuery.isSuccess && recent?.pagination.total === 0;
 
   const monthlyChart = useMemo(
@@ -832,6 +839,7 @@ export default function OverviewPage() {
         open={transactionOpen}
         transaction={null}
         categories={categories}
+        accounts={activeAccounts}
         pending={createTransactionMutation.isPending}
         onOpenChange={setTransactionOpen}
         onSubmit={async (payload) => {

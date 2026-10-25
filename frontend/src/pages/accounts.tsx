@@ -1,20 +1,18 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, Landmark, Pencil, Plus, RotateCcw, Wallet } from "lucide-react";
+import { Archive, Pencil, Plus, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import {
   ConfirmDialog,
   EmptyState,
   ErrorState,
   PageHeader,
-  StatCard,
-  StatusBadge,
 } from "@/components/shared";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AccountAmount } from "@/features/accounts/account-amount";
+import { AccountCard } from "@/features/accounts/account-card";
 import { AccountFormDialog } from "@/features/accounts/account-form-dialog";
 import {
   archiveAccount,
@@ -30,7 +28,7 @@ import {
   type AccountWritePayload,
 } from "@/features/accounts/types";
 import { ApiClientError } from "@/lib/api";
-import { formatINRString, isNegativeMoneyString } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { queryKeys } from "@/lib/query-keys";
 
 type AccountsTab = "active" | "archived";
@@ -38,56 +36,47 @@ type AccountsTab = "active" | "archived";
 const queryErrorMessage = (error: unknown, fallback: string) =>
   error instanceof ApiClientError ? error.message : fallback;
 
-const unsignedMoneyString = (amount: string) =>
-  amount.trim().startsWith("-") ? amount.trim().slice(1) : amount.trim();
-
-function AccountAmount({
-  amount,
-  isCreditCard,
+function SummaryTile({
+  label,
+  value,
+  prominent = false,
 }: {
-  amount: string;
-  isCreditCard: boolean;
+  label: string;
+  value: ReactNode;
+  prominent?: boolean;
 }) {
-  const negative = isNegativeMoneyString(amount);
-  const formatted = formatINRString(negative ? unsignedMoneyString(amount) : amount);
-  const owed = isCreditCard && negative;
-
   return (
-    <span
-      className={
-        negative ? "tabular-nums text-danger" : "tabular-nums text-foreground"
-      }
+    <div
+      className={cn(
+        "rounded-xl border border-border bg-card",
+        prominent ? "px-4 py-3" : "px-3 py-2.5",
+      )}
     >
-      {owed ? `${formatted} owed` : negative ? `−${formatted}` : formatted}
-    </span>
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div
+        className={cn(
+          "mt-1 font-semibold tracking-tight",
+          prominent ? "text-2xl" : "text-base",
+        )}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
 
 function AccountsPageSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, index) => (
-          <Card key={index}>
-            <CardHeader>
-              <Skeleton className="h-4 w-24" />
-            </CardHeader>
-            <CardContent>
-              <Skeleton className="h-8 w-32" />
-            </CardContent>
-          </Card>
+    <div className="space-y-4">
+      <Skeleton className="h-20 w-full rounded-xl" />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <Skeleton key={index} className="h-16 rounded-xl" />
         ))}
       </div>
-      <div className="grid gap-4">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 3 }).map((_, index) => (
-          <article
-            key={index}
-            className="space-y-3 rounded-xl border border-border bg-card p-4"
-          >
-            <Skeleton className="h-5 w-40" />
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-6 w-28" />
-          </article>
+          <Skeleton key={index} className="h-[7.5rem] rounded-xl" />
         ))}
       </div>
     </div>
@@ -194,11 +183,11 @@ export default function AccountsPage() {
     }
 
     return (
-      <div className="flex justify-end gap-1">
+      <>
         <Button
           type="button"
           variant="ghost"
-          size="icon"
+          size="icon-sm"
           aria-label={`Edit ${account.name}`}
           onClick={() => {
             setEditing(account);
@@ -210,18 +199,18 @@ export default function AccountsPage() {
         <Button
           type="button"
           variant="ghost"
-          size="icon"
+          size="icon-sm"
           aria-label={`Archive ${account.name}`}
           onClick={() => setArchiving(account)}
         >
           <Archive />
         </Button>
-      </div>
+      </>
     );
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Accounts"
         description="Track balances across bank, cash, wallet, and credit accounts."
@@ -251,8 +240,9 @@ export default function AccountsPage() {
       ) : null}
 
       {!isLoading && !isError && summary ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <StatCard
+        <div className="space-y-3">
+          <SummaryTile
+            prominent
             label="Net balance"
             value={
               <AccountAmount
@@ -260,25 +250,22 @@ export default function AccountsPage() {
                 isCreditCard={false}
               />
             }
-            icon={Wallet}
           />
-          <StatCard
-            label="Accounts"
-            value={summary.accountCount}
-            icon={Landmark}
-          />
-          {summary.byType.map((item) => (
-            <StatCard
-              key={item.type}
-              label={`${ACCOUNT_TYPE_LABELS[item.type]} total`}
-              value={
-                <AccountAmount
-                  amount={item.total}
-                  isCreditCard={item.type === "credit_card"}
-                />
-              }
-            />
-          ))}
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <SummaryTile label="Accounts" value={summary.accountCount} />
+            {summary.byType.map((item) => (
+              <SummaryTile
+                key={item.type}
+                label={`${ACCOUNT_TYPE_LABELS[item.type]} total`}
+                value={
+                  <AccountAmount
+                    amount={item.total}
+                    isCreditCard={item.type === "credit_card"}
+                  />
+                }
+              />
+            ))}
+          </div>
         </div>
       ) : null}
 
@@ -295,41 +282,13 @@ export default function AccountsPage() {
       ) : null}
 
       {!isLoading && !isError && accounts.length > 0 ? (
-        <div className="grid gap-3">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {accounts.map((account) => (
-            <article
+            <AccountCard
               key={account.id}
-              className="space-y-3 rounded-xl border border-border bg-card p-4"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-medium text-foreground">{account.name}</h2>
-                    {account.isDefault ? (
-                      <Badge variant="secondary">Default</Badge>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge
-                      label={ACCOUNT_TYPE_LABELS[account.type]}
-                      tone="neutral"
-                    />
-                    {account.institutionName ? (
-                      <span className="text-sm text-muted-foreground">
-                        {account.institutionName}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-                {renderActions(account)}
-              </div>
-              <p className="text-lg font-semibold tracking-tight">
-                <AccountAmount
-                  amount={account.balance}
-                  isCreditCard={account.type === "credit_card"}
-                />
-              </p>
-            </article>
+              account={account}
+              actions={renderActions(account)}
+            />
           ))}
         </div>
       ) : null}
@@ -361,12 +320,12 @@ export default function AccountsPage() {
         }
         confirmLabel="Archive"
         pendingLabel="Archiving…"
-        pending={archiveMutation.isPending}
         onConfirm={async () => {
           if (archiving) {
             await archiveMutation.mutateAsync(archiving.id);
           }
         }}
+        pending={archiveMutation.isPending}
       />
     </div>
   );

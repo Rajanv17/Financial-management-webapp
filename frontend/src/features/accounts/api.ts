@@ -6,6 +6,8 @@ export const fetchAccounts = (archived = false) => {
   return api<Account[]>(`/accounts${query}`);
 };
 
+export const fetchAccount = (id: string) => api<Account>(`/accounts/${id}`);
+
 export const fetchAccountSummary = () =>
   api<AccountSummary>("/accounts/summary");
 
