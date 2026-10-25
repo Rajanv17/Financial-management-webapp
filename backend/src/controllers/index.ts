@@ -28,6 +28,15 @@ import {
   archiveBudget,
 } from "./budget.controller";
 import { fetchDashboardSummary } from "./dashboard.controller";
+import {
+  createAccount,
+  fetchAccounts,
+  fetchAccountSummary,
+  fetchAccountById,
+  updateAccount,
+  archiveAccount,
+  restoreAccount,
+} from "./account.controller";
 
 export {
   registerUser,
@@ -52,4 +61,11 @@ export {
   updateBudget,
   archiveBudget,
   fetchDashboardSummary,
+  createAccount,
+  fetchAccounts,
+  fetchAccountSummary,
+  fetchAccountById,
+  updateAccount,
+  archiveAccount,
+  restoreAccount,
 };
