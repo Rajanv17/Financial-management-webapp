@@ -516,6 +516,22 @@ const seedDemo = async () => {
   const host = databaseHost(databaseUrl);
   console.log(`Database host: ${host}`);
 
+  const databaseName = (url: string) => {
+    try {
+      return new URL(url).pathname.replace(/^\//, "") || "unknown";
+    } catch {
+      return "unknown";
+    }
+  };
+
+  const dbName = databaseName(databaseUrl);
+  console.log(`Database: ${dbName}`);
+  if (dbName.endsWith("_test")) {
+    console.error(`Refusing to seed test database "${dbName}".`);
+    process.exitCode = 1;
+    return;
+  }
+
   const user = await prisma.user.findUnique({ where: { username } });
   if (!user) {
     console.error(
@@ -773,41 +789,6 @@ const seedDemo = async () => {
         })),
       });
 
-      const incomeCount = drafts.filter(
-        (draft) => draft.type === "income",
-      ).length;
-      const expenseCount = drafts.filter(
-        (draft) => draft.type === "expense",
-      ).length;
-
-      console.log(`Seeded existing user "${user.username}" (${user.id})`);
-      console.log(
-        `Removed ${deletedTx.count} transactions, ${deletedBudgets.count} budgets, and ${deletedCustomCategories.count} custom categories`,
-      );
-      console.log(
-        `Inserted ${drafts.length} transactions (${incomeCount} income, ${expenseCount} expense) from ${windows[0]?.year}-${String(windows[0]?.month).padStart(2, "0")} through ${current.year}-${String(current.month).padStart(2, "0")}`,
-      );
-      console.log(
-        `Inserted ${recentExpenses.length} expenses dated within the last 3 days (none in the future)`,
-      );
-      console.log(
-        `Created ${customCategories.length} custom categories (${archivedCustom.map((item) => item.name).join(", ") || "none"} archived):`,
-      );
-      for (const item of customCategories) {
-        const state = item.spec.archive ? "archived" : "active";
-        console.log(
-          `  ${item.category.name} (${item.category.type}, ${state})`,
-        );
-      }
-      console.log(
-        `Inserted ${budgets.length} budgets for ${current.year}-${String(current.month).padStart(2, "0")}:`,
-      );
-      for (const budget of budgets) {
-        console.log(
-          `  ${budget.category.name}: limit ${budget.amount.toFixed(2)}, spent ${budget.spent.toFixed(2)} (${budget.percentageUsed}%, ${budget.band})`,
-        );
-      }
-
       return {
         deletedTx,
         deletedBudgets,
@@ -830,6 +811,36 @@ const seedDemo = async () => {
     archivedCustom,
     budgets,
   } = result;
+
+  const incomeCount = drafts.filter((draft) => draft.type === "income").length;
+  const expenseCount = drafts.filter(
+    (draft) => draft.type === "expense",
+  ).length;
+  const monthLabel = `${current.year}-${String(current.month).padStart(2, "0")}`;
+
+  console.log(`Seeded existing user "${user.username}" (${user.id})`);
+  console.log(
+    `Removed ${deletedTx.count} transactions, ${deletedBudgets.count} budgets, ${deletedCustomCategories.count} custom categories and ${deletedAccounts.count} accounts`,
+  );
+  console.log(
+    `Inserted ${drafts.length} transactions (${incomeCount} income, ${expenseCount} expense) from ${windows[0]?.year}-${String(windows[0]?.month).padStart(2, "0")} through ${monthLabel}`,
+  );
+  console.log(
+    `Inserted ${recentExpenses.length} expenses dated within the last 3 days (none in the future)`,
+  );
+  console.log(
+    `Created ${customCategories.length} custom categories (${archivedCustom.map((item) => item.name).join(", ") || "none"} archived):`,
+  );
+  for (const item of customCategories) {
+    const state = item.spec.archive ? "archived" : "active";
+    console.log(`  ${item.category.name} (${item.category.type}, ${state})`);
+  }
+  console.log(`Inserted ${budgets.length} budgets for ${monthLabel}:`);
+  for (const budget of budgets) {
+    console.log(
+      `  ${budget.category.name}: limit ${budget.amount.toFixed(2)}, spent ${budget.spent.toFixed(2)} (${budget.percentageUsed}%, ${budget.band})`,
+    );
+  }
 };
 
 seedDemo()
