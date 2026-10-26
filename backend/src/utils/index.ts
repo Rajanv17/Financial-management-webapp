@@ -13,6 +13,7 @@ import {
 } from "./validate.util";
 import { serializeAmount } from "./serializers.util";
 import { budgetUsage } from "./budgetStatus.util";
+import { getCurrentMonthIST, getMonthRangeIST } from "./period.util";
 import {
   hashPassword,
   normalizeIdentifier,
@@ -35,6 +36,8 @@ export {
   parseInclusiveDate,
   serializeAmount,
   budgetUsage,
+  getCurrentMonthIST,
+  getMonthRangeIST,
   hashPassword,
   normalizeIdentifier,
   generateAccessToken,

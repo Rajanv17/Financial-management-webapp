@@ -1,18 +1,29 @@
 export type BudgetStatus = "under_limit" | "near_limit" | "exceeded";
 
+const toPaise = (value: number) => Math.round(value * 100);
+
 export const budgetUsage = (spent: number, amount: number) => {
-  const percentageUsed = Math.round((spent / amount) * 100);
+  const spentPaise = toPaise(spent);
+  const amountPaise = toPaise(amount);
+
+  if (amountPaise <= 0) {
+    return {
+      percentageUsed: 0,
+      status: "under_limit" as BudgetStatus,
+      remaining: 0,
+    };
+  }
 
   const status: BudgetStatus =
-    percentageUsed >= 100
+    spentPaise > amountPaise
       ? "exceeded"
-      : percentageUsed >= 80
+      : spentPaise * 100 >= amountPaise * 80
         ? "near_limit"
         : "under_limit";
 
   return {
-    percentageUsed,
+    percentageUsed: Math.floor((spentPaise * 100) / amountPaise),
     status,
-    remaining: amount - spent,
+    remaining: (amountPaise - spentPaise) / 100,
   };
 };

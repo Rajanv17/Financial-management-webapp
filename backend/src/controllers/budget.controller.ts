@@ -1,7 +1,7 @@
 import { Response } from "express";
 import { prisma } from "../config";
 import { AuthenticatedRequest } from "../middlewares";
-import { ApiError, ApiResponse, budgetUsage } from "../utils";
+import { ApiError, ApiResponse, budgetUsage, getMonthRangeIST } from "../utils";
 import {
   parseAmount,
   parseIntInRange,
@@ -91,8 +91,7 @@ const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
       .json(new ApiResponse(200, [], "Budgets fetched successfully"));
   }
 
-  const start = new Date(Date.UTC(year, month - 1, 1));
-  const end = new Date(Date.UTC(year, month, 1));
+  const { start, end } = getMonthRangeIST(month, year);
 
   const spentRows = await prisma.transaction.groupBy({
     by: ["categoryId"],
@@ -160,8 +159,7 @@ const fetchBudgetSummary = async (
 
   const totalBudget = Number(budgetTotals._sum.amount ?? 0);
 
-  const start = new Date(Date.UTC(year, month - 1, 1));
-  const end = new Date(Date.UTC(year, month, 1));
+  const { start, end } = getMonthRangeIST(month, year);
 
   const spentTotals =
     budgets.length === 0
