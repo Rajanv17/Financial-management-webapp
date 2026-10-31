@@ -26,6 +26,10 @@ const createBudget = async (req: AuthenticatedRequest, res: Response) => {
   const month = parseIntInRange(body.month, "Month", 1, 12);
   const year = parseIntInRange(body.year, "Year", 2000, 2100);
 
+  if (body.period !== undefined && body.period !== "monthly") {
+    throw new ApiError(400, "Only monthly budgets are supported");
+  }
+
   const category = await prisma.category.findFirst({
     where: {
       id: categoryId,
@@ -83,6 +87,7 @@ const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
   const budgets = await prisma.budget.findMany({
     where: { userId, month, year, isArchived: false },
     include: { category: true },
+    orderBy: { category: { name: "asc" } },
   });
 
   if (budgets.length === 0) {
@@ -130,10 +135,7 @@ const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
     );
 };
 
-const fetchBudgetSummary = async (
-  req: AuthenticatedRequest,
-  res: Response,
-) => {
+const fetchBudgetSummary = async (req: AuthenticatedRequest, res: Response) => {
   const userId = requireUserId(req);
   const month = parseIntInRange(req.query.month, "Month", 1, 12);
   const year = parseIntInRange(req.query.year, "Year", 2000, 2100);
@@ -180,13 +182,15 @@ const fetchBudgetSummary = async (
       ? { remaining: 0, percentageUsed: 0 }
       : budgetUsage(totalSpent, totalBudget);
 
-  return res.status(200).json(
-    new ApiResponse(
-      200,
-      { totalBudget, totalSpent, remaining, percentageUsed },
-      "Budget summary fetched successfully",
-    ),
-  );
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { totalBudget, totalSpent, remaining, percentageUsed },
+        "Budget summary fetched successfully",
+      ),
+    );
 };
 
 const updateBudget = async (req: AuthenticatedRequest, res: Response) => {
