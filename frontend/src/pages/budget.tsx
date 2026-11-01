@@ -9,6 +9,7 @@ import {
   Copy,
   RotateCcw,
   Archive,
+  TrendingUp,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -93,6 +94,45 @@ const remainingLabel = (remaining: number) => {
 
 const previousPeriod = (month: number, year: number) =>
   month === 1 ? { month: 12, year: year - 1 } : { month: month - 1, year };
+
+function SpendChange({
+  percent,
+  delta,
+}: {
+  percent: number | null;
+  delta: number;
+}) {
+  if (percent === null) {
+    return (
+      <span className="text-muted-foreground">
+        No data
+        <span className="block text-sm font-normal">
+          No spending last month
+        </span>
+      </span>
+    );
+  }
+  if (percent === 0) {
+    return (
+      <span>
+        About the same
+        <span className="block text-sm font-normal text-muted-foreground">
+          as last month
+        </span>
+      </span>
+    );
+  }
+  const up = percent > 0;
+  return (
+    <span className={up ? "text-danger" : "text-success"}>
+      {up ? "Up" : "Down"} {Math.abs(percent)}%
+      <span className="block text-sm font-normal text-muted-foreground">
+        <Money amount={Math.abs(delta)} /> {up ? "more" : "less"} than last
+        month
+      </span>
+    </span>
+  );
+}
 
 function BudgetPageSkeleton() {
   return (
@@ -367,7 +407,7 @@ export default function BudgetPage() {
       ) : null}
 
       {!isLoading && !isError && !isArchivedView && summary ? (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
             label="Total budget"
             value={<Money amount={summary.totalBudget} />}
@@ -388,6 +428,16 @@ export default function BudgetPage() {
               </span>
             }
             icon={PiggyBank}
+          />
+          <StatCard
+            label="Vs last month"
+            value={
+              <SpendChange
+                percent={summary.spentDeltaPercent}
+                delta={summary.spentDelta}
+              />
+            }
+            icon={TrendingUp}
           />
         </div>
       ) : null}
