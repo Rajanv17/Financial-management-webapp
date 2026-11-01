@@ -33,7 +33,7 @@ A full-stack personal financial application for tracking income and expenses, se
 - **Transactions**: record income and expenses, each tied to a category and an account.
 - **Categories**: organize transactions with custom categories.
 - **Accounts**: bank, cash, wallet, and credit card balances, with a default Unassigned account for new users.
-- **Budgets**: create and track budgets across categories.
+- **Monthly budgets**: track category budgets with progress and status, compare spending month over month, copy budgets from the previous month, and archive or restore budgets.
 - **Dashboard**: overview of income, expenses, and financial health with charts.
 
 ---
