@@ -129,6 +129,68 @@ const createBudget = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
+const copyBudgets = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = requireUserId(req);
+  const month = parseIntInRange(req.body.month, "Month", 1, 12);
+  const year = parseIntInRange(req.body.year, "Year", 2000, 2100);
+  const source = getPreviousMonth(month, year);
+
+  const [sourceBudgets, existing] = await Promise.all([
+    prisma.budget.findMany({
+      where: {
+        userId,
+        month: source.month,
+        year: source.year,
+        isArchived: false,
+      },
+      select: {
+        categoryId: true,
+        amount: true,
+        isActive: true,
+        category: { select: { isArchived: true } },
+      },
+    }),
+    prisma.budget.findMany({
+      where: { userId, month, year, isArchived: false },
+      select: { categoryId: true },
+    }),
+  ]);
+
+  const existingCategoryIds = new Set(existing.map((b) => b.categoryId));
+  const toCreate = sourceBudgets.filter(
+    (b) => !b.category.isArchived && !existingCategoryIds.has(b.categoryId),
+  );
+
+  const created =
+    toCreate.length === 0
+      ? 0
+      : (
+          await prisma.budget.createMany({
+            data: toCreate.map((b) => ({
+              userId,
+              categoryId: b.categoryId,
+              amount: b.amount,
+              month,
+              year,
+              isActive: b.isActive,
+            })),
+            skipDuplicates: true,
+          })
+        ).count;
+
+  const status = created > 0 ? 201 : 200;
+
+  return res
+    .status(status)
+    .json(
+      new ApiResponse(
+        status,
+        { created, skipped: sourceBudgets.length - created, month, year },
+        created > 0 ? "Budgets copied successfully" : "No budgets to copy",
+      ),
+    );
+};
+
 const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
   const userId = requireUserId(req);
   const month = parseIntInRange(req.query.month, "Month", 1, 12);
@@ -313,6 +375,7 @@ const archiveBudget = async (req: AuthenticatedRequest, res: Response) => {
 
 export {
   createBudget,
+  copyBudgets,
   fetchBudgets,
   fetchBudgetSummary,
   updateBudget,
