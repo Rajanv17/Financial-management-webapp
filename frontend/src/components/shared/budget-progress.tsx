@@ -7,14 +7,11 @@ type BudgetProgressProps = {
   className?: string;
 };
 
-function budgetStatusPresentation(
-  percentageUsed: number,
-  status: BudgetProgressProps["status"],
-) {
+function budgetStatusPresentation(status: BudgetProgressProps["status"]) {
   if (status === "exceeded") {
     return { label: "Over budget", tone: "danger" as const };
   }
-  if (percentageUsed >= 80) {
+  if (status === "near_limit") {
     return { label: "Near limit", tone: "warning" as const };
   }
   return { label: "Normal", tone: "income" as const };
@@ -25,7 +22,7 @@ export function BudgetProgress({
   status,
   className,
 }: BudgetProgressProps) {
-  const presentation = budgetStatusPresentation(percentageUsed, status);
+  const presentation = budgetStatusPresentation(status);
   const barWidth = Math.min(Math.max(percentageUsed, 0), 100);
   const barTone =
     presentation.tone === "danger"

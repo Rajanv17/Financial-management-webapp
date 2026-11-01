@@ -5,6 +5,7 @@ import type {
   BudgetUpdatePayload,
   BudgetWithStats,
   BudgetWritePayload,
+  BudgetCopyResult,
 } from "./types";
 
 export const fetchBudgets = (month: number, year: number) =>
@@ -27,3 +28,9 @@ export const updateBudget = (id: string, input: BudgetUpdatePayload) =>
 
 export const archiveBudget = (id: string) =>
   api<Budget>(`/budgets/${id}`, { method: "DELETE" });
+
+export const copyBudgets = (month: number, year: number) =>
+  api<BudgetCopyResult>("/budgets/copy", {
+    method: "POST",
+    body: JSON.stringify({ month, year }),
+  });

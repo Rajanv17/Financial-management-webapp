@@ -6,6 +6,7 @@ import type {
   budgetStatusSchema,
   budgetSummarySchema,
   budgetWithStatsSchema,
+  budgetCopyResultSchema,
 } from "./schemas";
 
 export type BudgetStatus = z.infer<typeof budgetStatusSchema>;
@@ -14,6 +15,7 @@ export type BudgetWithStats = z.infer<typeof budgetWithStatsSchema>;
 export type BudgetSummary = z.infer<typeof budgetSummarySchema>;
 export type BudgetFormValues = z.infer<typeof budgetFormSchema>;
 export type BudgetEditFormValues = z.infer<typeof budgetEditFormSchema>;
+export type BudgetCopyResult = z.infer<typeof budgetCopyResultSchema>;
 
 export type BudgetWritePayload = {
   categoryId: string;

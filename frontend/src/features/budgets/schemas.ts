@@ -32,6 +32,7 @@ export const budgetSchema = z.object({
 export const budgetWithStatsSchema = budgetSchema.extend({
   category: categorySchema,
   spent: z.number(),
+  previousSpent: z.number(),
   remaining: z.number(),
   percentageUsed: z.number(),
   status: budgetStatusSchema,
@@ -42,6 +43,16 @@ export const budgetSummarySchema = z.object({
   totalSpent: z.number(),
   remaining: z.number(),
   percentageUsed: z.number(),
+  previousTotalSpent: z.number(),
+  spentDelta: z.number(),
+  spentDeltaPercent: z.number().nullable(),
+});
+
+export const budgetCopyResultSchema = z.object({
+  created: z.number(),
+  skipped: z.number(),
+  month: z.number(),
+  year: z.number(),
 });
 
 export const budgetFormSchema = z.object({
