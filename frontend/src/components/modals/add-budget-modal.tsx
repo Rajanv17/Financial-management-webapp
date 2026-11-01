@@ -203,16 +203,21 @@ export function AddBudgetModal({
           </p>
         ) : null}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-start gap-2">
         <input
           id="budget-active"
           type="checkbox"
-          className="size-4 rounded border-input accent-primary"
+          className="mt-1 size-4 rounded border-input accent-primary"
+          aria-describedby="budget-active-help"
           {...editForm.register("isActive")}
         />
-        <Label htmlFor="budget-active">
-          Active (paused budgets are left out of the totals)
-        </Label>
+        <div className="space-y-0.5">
+          <Label htmlFor="budget-active">Include in totals</Label>
+          <p id="budget-active-help" className="text-sm text-muted-foreground">
+            Turn this off to pause the budget. It stays on the page but is left
+            out of the summary.
+          </p>
+        </div>
       </div>
       {formError ? (
         <p className="text-sm text-destructive" role="alert">
