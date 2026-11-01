@@ -1,8 +1,13 @@
 import { Response } from "express";
 import { prisma } from "../config";
 import { AuthenticatedRequest } from "../middlewares";
-import { ApiError, ApiResponse, budgetUsage } from "../utils";
 import {
+  ApiError,
+  ApiResponse,
+  budgetUsage,
+  getMonthRangeIST,
+  getPreviousMonth,
+  spentChange,
   parseAmount,
   parseIntInRange,
   requireId,
@@ -17,6 +22,51 @@ const requireUserId = (req: AuthenticatedRequest): string => {
   return userId;
 };
 
+type DateRange = { start: Date; end: Date };
+
+const getSpentByCategory = async (
+  userId: string,
+  categoryIds: string[],
+  range: DateRange,
+) => {
+  if (categoryIds.length === 0) return new Map<string, number>();
+
+  const rows = await prisma.transaction.groupBy({
+    by: ["categoryId"],
+    where: {
+      userId,
+      type: "expense",
+      date: { gte: range.start, lt: range.end },
+      categoryId: { in: categoryIds },
+    },
+    _sum: { amount: true },
+  });
+
+  return new Map(
+    rows.map((row) => [row.categoryId, Number(row._sum.amount ?? 0)]),
+  );
+};
+
+const getTotalSpent = async (
+  userId: string,
+  categoryIds: string[],
+  range: DateRange,
+) => {
+  if (categoryIds.length === 0) return 0;
+
+  const result = await prisma.transaction.aggregate({
+    where: {
+      userId,
+      type: "expense",
+      date: { gte: range.start, lt: range.end },
+      categoryId: { in: categoryIds },
+    },
+    _sum: { amount: true },
+  });
+
+  return Number(result._sum.amount ?? 0);
+};
+
 const createBudget = async (req: AuthenticatedRequest, res: Response) => {
   const userId = requireUserId(req);
   const body = req.body;
@@ -25,6 +75,10 @@ const createBudget = async (req: AuthenticatedRequest, res: Response) => {
   const amount = parseAmount(body.amount, "Budget amount");
   const month = parseIntInRange(body.month, "Month", 1, 12);
   const year = parseIntInRange(body.year, "Year", 2000, 2100);
+
+  if (body.period !== undefined && body.period !== "monthly") {
+    throw new ApiError(400, "Only monthly budgets are supported");
+  }
 
   const category = await prisma.category.findFirst({
     where: {
@@ -75,14 +129,86 @@ const createBudget = async (req: AuthenticatedRequest, res: Response) => {
   }
 };
 
+const copyBudgets = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = requireUserId(req);
+  const month = parseIntInRange(req.body.month, "Month", 1, 12);
+  const year = parseIntInRange(req.body.year, "Year", 2000, 2100);
+  const source = getPreviousMonth(month, year);
+
+  const [sourceBudgets, existing] = await Promise.all([
+    prisma.budget.findMany({
+      where: {
+        userId,
+        month: source.month,
+        year: source.year,
+        isArchived: false,
+      },
+      select: {
+        categoryId: true,
+        amount: true,
+        isActive: true,
+        category: { select: { isArchived: true } },
+      },
+    }),
+    prisma.budget.findMany({
+      where: { userId, month, year, isArchived: false },
+      select: { categoryId: true },
+    }),
+  ]);
+
+  const existingCategoryIds = new Set(existing.map((b) => b.categoryId));
+  const toCreate = sourceBudgets.filter(
+    (b) => !b.category.isArchived && !existingCategoryIds.has(b.categoryId),
+  );
+
+  const created =
+    toCreate.length === 0
+      ? 0
+      : (
+          await prisma.budget.createMany({
+            data: toCreate.map((b) => ({
+              userId,
+              categoryId: b.categoryId,
+              amount: b.amount,
+              month,
+              year,
+              isActive: b.isActive,
+            })),
+            skipDuplicates: true,
+          })
+        ).count;
+
+  const status = created > 0 ? 201 : 200;
+
+  return res
+    .status(status)
+    .json(
+      new ApiResponse(
+        status,
+        { created, skipped: sourceBudgets.length - created, month, year },
+        created > 0 ? "Budgets copied successfully" : "No budgets to copy",
+      ),
+    );
+};
+
 const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
   const userId = requireUserId(req);
   const month = parseIntInRange(req.query.month, "Month", 1, 12);
   const year = parseIntInRange(req.query.year, "Year", 2000, 2100);
+  const archivedParam = req.query.archived;
+  if (
+    archivedParam !== undefined &&
+    archivedParam !== "true" &&
+    archivedParam !== "false"
+  ) {
+    throw new ApiError(400, "archived must be true or false");
+  }
+  const archived = archivedParam === "true";
 
   const budgets = await prisma.budget.findMany({
-    where: { userId, month, year, isArchived: false },
+    where: { userId, month, year, isArchived: archived },
     include: { category: true },
+    orderBy: { category: { name: "asc" } },
   });
 
   if (budgets.length === 0) {
@@ -91,33 +217,29 @@ const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
       .json(new ApiResponse(200, [], "Budgets fetched successfully"));
   }
 
-  const start = new Date(Date.UTC(year, month - 1, 1));
-  const end = new Date(Date.UTC(year, month, 1));
+  const categoryIds = budgets.map((b) => b.categoryId);
+  const previous = getPreviousMonth(month, year);
 
-  const spentRows = await prisma.transaction.groupBy({
-    by: ["categoryId"],
-    where: {
+  const [spentByCategory, previousByCategory] = await Promise.all([
+    getSpentByCategory(userId, categoryIds, getMonthRangeIST(month, year)),
+    getSpentByCategory(
       userId,
-      type: "expense",
-      date: { gte: start, lt: end },
-      categoryId: { in: budgets.map((b) => b.categoryId) },
-    },
-    _sum: { amount: true },
-  });
-
-  const spentByCategory = new Map(
-    spentRows.map((row) => [row.categoryId, Number(row._sum.amount ?? 0)]),
-  );
+      categoryIds,
+      getMonthRangeIST(previous.month, previous.year),
+    ),
+  ]);
 
   const budgetsWithStats = budgets.map((budget) => {
     const amount = Number(budget.amount);
     const spent = spentByCategory.get(budget.categoryId) ?? 0;
+    const previousSpent = previousByCategory.get(budget.categoryId) ?? 0;
     const { percentageUsed, status, remaining } = budgetUsage(spent, amount);
 
     return {
       ...budget,
       amount,
       spent,
+      previousSpent,
       remaining,
       percentageUsed,
       status,
@@ -131,10 +253,7 @@ const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
     );
 };
 
-const fetchBudgetSummary = async (
-  req: AuthenticatedRequest,
-  res: Response,
-) => {
+const fetchBudgetSummary = async (req: AuthenticatedRequest, res: Response) => {
   const userId = requireUserId(req);
   const month = parseIntInRange(req.query.month, "Month", 1, 12);
   const year = parseIntInRange(req.query.year, "Year", 2000, 2100);
@@ -159,33 +278,40 @@ const fetchBudgetSummary = async (
   ]);
 
   const totalBudget = Number(budgetTotals._sum.amount ?? 0);
+  const categoryIds = budgets.map((budget) => budget.categoryId);
+  const previous = getPreviousMonth(month, year);
 
-  const start = new Date(Date.UTC(year, month - 1, 1));
-  const end = new Date(Date.UTC(year, month, 1));
+  const [totalSpent, previousTotalSpent] = await Promise.all([
+    getTotalSpent(userId, categoryIds, getMonthRangeIST(month, year)),
+    getTotalSpent(
+      userId,
+      categoryIds,
+      getMonthRangeIST(previous.month, previous.year),
+    ),
+  ]);
 
-  const spentTotals =
-    budgets.length === 0
-      ? { _sum: { amount: null } }
-      : await prisma.transaction.aggregate({
-          where: {
-            userId,
-            type: "expense",
-            date: { gte: start, lt: end },
-            categoryId: { in: budgets.map((budget) => budget.categoryId) },
-          },
-          _sum: { amount: true },
-        });
-
-  const totalSpent = Number(spentTotals._sum.amount ?? 0);
   const { remaining, percentageUsed } =
     totalBudget === 0
       ? { remaining: 0, percentageUsed: 0 }
       : budgetUsage(totalSpent, totalBudget);
 
+  const { spentDelta, spentDeltaPercent } = spentChange(
+    totalSpent,
+    previousTotalSpent,
+  );
+
   return res.status(200).json(
     new ApiResponse(
       200,
-      { totalBudget, totalSpent, remaining, percentageUsed },
+      {
+        totalBudget,
+        totalSpent,
+        remaining,
+        percentageUsed,
+        previousTotalSpent,
+        spentDelta,
+        spentDeltaPercent,
+      },
       "Budget summary fetched successfully",
     ),
   );
@@ -256,10 +382,75 @@ const archiveBudget = async (req: AuthenticatedRequest, res: Response) => {
     );
 };
 
+const restoreBudget = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = requireUserId(req);
+  const id = requireId(req.params.id, "Budget id");
+
+  const existing = await prisma.budget.findFirst({
+    where: { id, userId, isArchived: true },
+    include: { category: { select: { isArchived: true } } },
+  });
+
+  if (!existing) {
+    throw new ApiError(404, "Archived budget not found");
+  }
+
+  if (existing.category.isArchived) {
+    throw new ApiError(
+      400,
+      "Restore the category before restoring this budget",
+    );
+  }
+
+  const conflict = await prisma.budget.findFirst({
+    where: {
+      userId,
+      categoryId: existing.categoryId,
+      month: existing.month,
+      year: existing.year,
+      isArchived: false,
+    },
+  });
+
+  if (conflict) {
+    throw new ApiError(
+      400,
+      "An active budget already exists for this category and month",
+    );
+  }
+
+  try {
+    const budget = await prisma.budget.update({
+      where: { id },
+      data: { isArchived: false },
+    });
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          serializeAmount(budget),
+          "Budget restored successfully",
+        ),
+      );
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      throw new ApiError(
+        400,
+        "An active budget already exists for this category and month",
+      );
+    }
+    throw error;
+  }
+};
+
 export {
   createBudget,
+  copyBudgets,
   fetchBudgets,
   fetchBudgetSummary,
   updateBudget,
   archiveBudget,
+  restoreBudget,
 };

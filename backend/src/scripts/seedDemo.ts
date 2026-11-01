@@ -5,6 +5,10 @@ import type {
   TransactionType,
 } from "../generated/prisma/client";
 import { budgetUsage } from "../utils/budgetStatus.util";
+import {
+  getCurrentMonthIST,
+  getMonthRangeIST,
+} from "../utils/period.util";
 
 const ALLOWED_USERNAME = "demo";
 
@@ -480,9 +484,10 @@ const databaseHost = (url: string) => {
 };
 
 const monthWindows = (today: Date): MonthWindow[] => {
-  const year = today.getUTCFullYear();
-  const month = today.getUTCMonth() + 1;
-  const day = today.getUTCDate();
+  const { year, month } = getCurrentMonthIST(today);
+  const { start } = getMonthRangeIST(month, year);
+  const day =
+    Math.floor((today.getTime() - start.getTime()) / 86_400_000) + 1;
   const windows: MonthWindow[] = [];
   for (let ago = 3; ago >= 0; ago -= 1) {
     const stamp = addMonths(year, month, -ago);
@@ -739,10 +744,10 @@ const seedDemo = async () => {
         })),
       });
 
-      const currentStart = new Date(
-        Date.UTC(current.year, current.month - 1, 1),
+      const { start: currentStart, end: currentEnd } = getMonthRangeIST(
+        current.month,
+        current.year,
       );
-      const currentEnd = new Date(Date.UTC(current.year, current.month, 1));
       const spentRows = await tx.transaction.groupBy({
         by: ["categoryId"],
         where: {

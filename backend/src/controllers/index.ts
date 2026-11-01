@@ -22,10 +22,12 @@ import {
 } from "./category.controller";
 import {
   createBudget,
+  copyBudgets,
   fetchBudgets,
   fetchBudgetSummary,
   updateBudget,
   archiveBudget,
+  restoreBudget,
 } from "./budget.controller";
 import { fetchDashboardSummary } from "./dashboard.controller";
 import {
@@ -56,10 +58,12 @@ export {
   archiveCategory,
   restoreCategory,
   createBudget,
+  copyBudgets,
   fetchBudgets,
   fetchBudgetSummary,
   updateBudget,
   archiveBudget,
+  restoreBudget,
   fetchDashboardSummary,
   createAccount,
   fetchAccounts,
