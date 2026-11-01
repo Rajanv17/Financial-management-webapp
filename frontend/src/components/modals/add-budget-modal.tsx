@@ -113,7 +113,10 @@ export function AddBudgetModal({
     },
   });
 
-  const selectedMonth = useWatch({ control: createForm.control, name: "month" });
+  const selectedMonth = useWatch({
+    control: createForm.control,
+    name: "month",
+  });
   const selectedYear = useWatch({ control: createForm.control, name: "year" });
   const selectedCategoryId = useWatch({
     control: createForm.control,
@@ -173,7 +176,12 @@ export function AddBudgetModal({
   });
 
   const fields = isEdit ? (
-    <form id="budget-form" onSubmit={submitEdit} className="space-y-4" noValidate>
+    <form
+      id="budget-form"
+      onSubmit={submitEdit}
+      className="space-y-4"
+      noValidate
+    >
       <p className="text-sm text-muted-foreground">
         Category: {budget.category.name}. Only the amount can be changed for
         this month.
@@ -202,7 +210,9 @@ export function AddBudgetModal({
           className="size-4 rounded border-input accent-primary"
           {...editForm.register("isActive")}
         />
-        <Label htmlFor="budget-active">Active</Label>
+        <Label htmlFor="budget-active">
+          Active (paused budgets are left out of the totals)
+        </Label>
       </div>
       {formError ? (
         <p className="text-sm text-destructive" role="alert">
@@ -263,7 +273,9 @@ export function AddBudgetModal({
           inputMode="decimal"
           aria-invalid={!!createForm.formState.errors.amount}
           aria-describedby={
-            createForm.formState.errors.amount ? "budget-amount-error" : undefined
+            createForm.formState.errors.amount
+              ? "budget-amount-error"
+              : undefined
           }
           {...createForm.register("amount")}
         />

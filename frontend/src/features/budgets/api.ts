@@ -8,8 +8,10 @@ import type {
   BudgetCopyResult,
 } from "./types";
 
-export const fetchBudgets = (month: number, year: number) =>
-  api<BudgetWithStats[]>(`/budgets?month=${month}&year=${year}`);
+export const fetchBudgets = (month: number, year: number, archived = false) =>
+  api<BudgetWithStats[]>(
+    `/budgets?month=${month}&year=${year}${archived ? "&archived=true" : ""}`,
+  );
 
 export const fetchBudgetSummary = (month: number, year: number) =>
   api<BudgetSummary>(`/budgets/summary?month=${month}&year=${year}`);
@@ -28,6 +30,9 @@ export const updateBudget = (id: string, input: BudgetUpdatePayload) =>
 
 export const archiveBudget = (id: string) =>
   api<Budget>(`/budgets/${id}`, { method: "DELETE" });
+
+export const restoreBudget = (id: string) =>
+  api<Budget>(`/budgets/${id}/restore`, { method: "PATCH" });
 
 export const copyBudgets = (month: number, year: number) =>
   api<BudgetCopyResult>("/budgets/copy", {

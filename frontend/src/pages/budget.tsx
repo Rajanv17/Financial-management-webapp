@@ -1,6 +1,16 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, PiggyBank, Plus, TrendingDown, Trash2, Wallet } from "lucide-react";
+import {
+  Pencil,
+  PiggyBank,
+  Plus,
+  TrendingDown,
+  Wallet,
+  Copy,
+  RotateCcw,
+  Archive,
+} from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { AddBudgetModal } from "@/components/modals/add-budget-modal";
 import {
@@ -29,6 +39,8 @@ import {
   fetchBudgetSummary,
   fetchBudgets,
   updateBudget,
+  restoreBudget,
+  copyBudgets,
 } from "@/features/budgets/api";
 import type {
   BudgetUpdatePayload,
@@ -39,6 +51,8 @@ import { fetchCategories } from "@/features/categories/api";
 import { ApiClientError } from "@/lib/api";
 import { formatINR } from "@/lib/format";
 import { queryKeys } from "@/lib/query-keys";
+
+type BudgetsTab = "active" | "archived";
 
 const MONTH_OPTIONS = [
   { value: 1, label: "January" },
@@ -76,6 +90,9 @@ const remainingLabel = (remaining: number) => {
   }
   return formatINR(remaining);
 };
+
+const previousPeriod = (month: number, year: number) =>
+  month === 1 ? { month: 12, year: year - 1 } : { month: month - 1, year };
 
 function BudgetPageSkeleton() {
   return (
@@ -118,15 +135,23 @@ export default function BudgetPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<BudgetWithStats | null>(null);
   const [archiving, setArchiving] = useState<BudgetWithStats | null>(null);
+  const [tab, setTab] = useState<BudgetsTab>("active");
+  const isArchivedView = tab === "archived";
+  const previous = previousPeriod(month, year);
+
+  const previousLabel = `${
+    MONTH_OPTIONS.find((item) => item.value === previous.month)?.label ?? ""
+  } ${previous.year}`;
 
   const budgetsQuery = useQuery({
-    queryKey: queryKeys.budgets.list(month, year),
-    queryFn: () => fetchBudgets(month, year),
+    queryKey: [...queryKeys.budgets.list(month, year), tab],
+    queryFn: () => fetchBudgets(month, year, isArchivedView),
   });
 
   const summaryQuery = useQuery({
     queryKey: queryKeys.budgets.summary(month, year),
     queryFn: () => fetchBudgetSummary(month, year),
+    enabled: !isArchivedView,
   });
 
   const categoriesQuery = useQuery({
@@ -166,6 +191,7 @@ export default function BudgetPage() {
         setYear(variables.createPayload.year);
       }
       setFormOpen(false);
+      setTab("active");
       setEditing(null);
     },
   });
@@ -185,6 +211,54 @@ export default function BudgetPage() {
       );
     },
   });
+
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => restoreBudget(id),
+    onSuccess: async () => {
+      await invalidateRelated();
+      toast.success("Budget restored");
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof ApiClientError
+          ? error.message
+          : "Could not restore the budget.",
+      );
+    },
+  });
+
+  const copyMutation = useMutation({
+    mutationFn: () => copyBudgets(month, year),
+    onSuccess: async (result) => {
+      await invalidateRelated();
+      if (result.created > 0) {
+        toast.success(
+          `Copied ${result.created} ${result.created === 1 ? "budget" : "budgets"} from ${previousLabel}`,
+        );
+      } else {
+        toast.info(`No new budgets to copy from ${previousLabel}`);
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        error instanceof ApiClientError
+          ? error.message
+          : "Could not copy budgets.",
+      );
+    },
+  });
+
+  const copyAction = (
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => copyMutation.mutate()}
+      disabled={copyMutation.isPending}
+    >
+      <Copy />
+      {copyMutation.isPending ? "Copying…" : `Copy from ${previousLabel}`}
+    </Button>
+  );
 
   const budgets = useMemo(() => {
     const items = budgetsQuery.data ?? [];
@@ -213,7 +287,7 @@ export default function BudgetPage() {
 
   const retry = () => {
     void budgetsQuery.refetch();
-    void summaryQuery.refetch();
+    if (!isArchivedView) void summaryQuery.refetch();
   };
 
   return (
@@ -279,13 +353,20 @@ export default function BudgetPage() {
         }
       />
 
+      <Tabs value={tab} onValueChange={(value) => setTab(value as BudgetsTab)}>
+        <TabsList>
+          <TabsTrigger value="active">Active</TabsTrigger>
+          <TabsTrigger value="archived">Archived</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {isLoading ? <BudgetPageSkeleton /> : null}
 
       {isError && !isLoading ? (
         <ErrorState message={errorMessage} onRetry={retry} />
       ) : null}
 
-      {!isLoading && !isError && summary ? (
+      {!isLoading && !isError && !isArchivedView && summary ? (
         <div className="grid gap-4 md:grid-cols-3">
           <StatCard
             label="Total budget"
@@ -294,7 +375,9 @@ export default function BudgetPage() {
           />
           <StatCard
             label="Spent"
-            value={<Money amount={summary.totalSpent} className="text-danger" />}
+            value={
+              <Money amount={summary.totalSpent} className="text-danger" />
+            }
             icon={TrendingDown}
           />
           <StatCard
@@ -311,27 +394,41 @@ export default function BudgetPage() {
 
       {!isLoading && !isError && budgets.length === 0 ? (
         <EmptyState
-          title="Set your first budget"
-          description={`No budgets for ${monthLabel} ${year}. Create a monthly limit for an expense category.`}
+          title={
+            isArchivedView ? "No archived budgets" : "Set your first budget"
+          }
+          description={
+            isArchivedView
+              ? `Budgets you archive for ${monthLabel} ${year} appear here and can be restored.`
+              : `No budgets for ${monthLabel} ${year}. Create a monthly limit for an expense category, or copy last month's budgets.`
+          }
           action={
-            <Button
-              type="button"
-              onClick={() => {
-                setEditing(null);
-                setFormOpen(true);
-              }}
-            >
-              <Plus />
-              Create budget
-            </Button>
+            isArchivedView ? undefined : (
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    setEditing(null);
+                    setFormOpen(true);
+                  }}
+                >
+                  <Plus />
+                  Create budget
+                </Button>
+                {copyAction}
+              </div>
+            )
           }
         />
       ) : null}
 
       {!isLoading && !isError && budgets.length > 0 ? (
         <Card>
-          <CardHeader>
-            <CardTitle>Budget overview</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle>
+              {isArchivedView ? "Archived budgets" : "Budget overview"}
+            </CardTitle>
+            {isArchivedView ? null : copyAction}
           </CardHeader>
           <CardContent className="space-y-6">
             {budgets.map((budget) => (
@@ -352,36 +449,56 @@ export default function BudgetPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h2 className="font-medium text-foreground">
                         {budget.category.name}
+                        {!budget.isActive ? (
+                          <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-xs font-normal text-muted-foreground">
+                            Paused
+                          </span>
+                        ) : null}
                       </h2>
                       <div className="flex gap-1">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Edit ${budget.category.name} budget`}
-                          onClick={() => {
-                            setEditing(budget);
-                            setFormOpen(true);
-                          }}
-                        >
-                          <Pencil />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          aria-label={`Archive ${budget.category.name} budget`}
-                          onClick={() => setArchiving(budget)}
-                        >
-                          <Trash2 />
-                        </Button>
+                        {isArchivedView ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={restoreMutation.isPending}
+                            onClick={() => restoreMutation.mutate(budget.id)}
+                          >
+                            <RotateCcw />
+                            Restore
+                          </Button>
+                        ) : (
+                          <>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Edit ${budget.category.name} budget`}
+                              onClick={() => {
+                                setEditing(budget);
+                                setFormOpen(true);
+                              }}
+                            >
+                              <Pencil />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Archive ${budget.category.name} budget`}
+                              onClick={() => setArchiving(budget)}
+                            >
+                              <Archive />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                     <BudgetProgress
                       percentageUsed={budget.percentageUsed}
                       status={budget.status}
                     />
-                    <div className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-4">
                       <p className="flex justify-between gap-2 sm:block">
                         <span className="text-muted-foreground">Limit</span>{" "}
                         <span className="tabular-nums text-foreground">
@@ -391,7 +508,10 @@ export default function BudgetPage() {
                       <p className="flex justify-between gap-2 sm:block">
                         <span className="text-muted-foreground">Spent</span>{" "}
                         <span className="tabular-nums">
-                          <Money amount={budget.spent} className="text-danger" />
+                          <Money
+                            amount={budget.spent}
+                            className="text-danger"
+                          />
                         </span>
                       </p>
                       <p className="flex justify-between gap-2 sm:block">
@@ -404,6 +524,14 @@ export default function BudgetPage() {
                           }
                         >
                           {remainingLabel(budget.remaining)}
+                        </span>
+                      </p>
+                      <p className="flex justify-between gap-2 sm:block">
+                        <span className="text-muted-foreground">
+                          Last month
+                        </span>{" "}
+                        <span className="tabular-nums text-foreground">
+                          <Money amount={budget.previousSpent} />
                         </span>
                       </p>
                     </div>
@@ -451,7 +579,7 @@ export default function BudgetPage() {
         title="Archive this budget?"
         description={
           archiving
-            ? `“${archiving.category.name}” will be archived for ${monthLabel} ${year}. You can create a new budget for this category later.`
+            ? `“${archiving.category.name}” will be archived for ${monthLabel} ${year}. You can restore it later from the Archived view.`
             : ""
         }
         confirmLabel="Archive"

@@ -27,6 +27,7 @@ import {
   fetchBudgetSummary,
   updateBudget,
   archiveBudget,
+  restoreBudget,
 } from "./budget.controller";
 import { fetchDashboardSummary } from "./dashboard.controller";
 import {
@@ -62,6 +63,7 @@ export {
   fetchBudgetSummary,
   updateBudget,
   archiveBudget,
+  restoreBudget,
   fetchDashboardSummary,
   createAccount,
   fetchAccounts,

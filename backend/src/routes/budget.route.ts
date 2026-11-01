@@ -6,6 +6,7 @@ import {
   fetchBudgetSummary,
   updateBudget,
   archiveBudget,
+  restoreBudget,
 } from "../controllers/index";
 import { verifyJWT } from "../middlewares/index";
 
@@ -18,5 +19,6 @@ router.route("/copy").post(copyBudgets);
 router.route("/").post(createBudget).get(fetchBudgets);
 
 router.route("/:id").patch(updateBudget).delete(archiveBudget);
+router.route("/:id/restore").patch(restoreBudget);
 
 export default router;

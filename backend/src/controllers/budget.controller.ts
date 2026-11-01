@@ -195,9 +195,18 @@ const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
   const userId = requireUserId(req);
   const month = parseIntInRange(req.query.month, "Month", 1, 12);
   const year = parseIntInRange(req.query.year, "Year", 2000, 2100);
+  const archivedParam = req.query.archived;
+  if (
+    archivedParam !== undefined &&
+    archivedParam !== "true" &&
+    archivedParam !== "false"
+  ) {
+    throw new ApiError(400, "archived must be true or false");
+  }
+  const archived = archivedParam === "true";
 
   const budgets = await prisma.budget.findMany({
-    where: { userId, month, year, isArchived: false },
+    where: { userId, month, year, isArchived: archived },
     include: { category: true },
     orderBy: { category: { name: "asc" } },
   });
@@ -373,6 +382,69 @@ const archiveBudget = async (req: AuthenticatedRequest, res: Response) => {
     );
 };
 
+const restoreBudget = async (req: AuthenticatedRequest, res: Response) => {
+  const userId = requireUserId(req);
+  const id = requireId(req.params.id, "Budget id");
+
+  const existing = await prisma.budget.findFirst({
+    where: { id, userId, isArchived: true },
+    include: { category: { select: { isArchived: true } } },
+  });
+
+  if (!existing) {
+    throw new ApiError(404, "Archived budget not found");
+  }
+
+  if (existing.category.isArchived) {
+    throw new ApiError(
+      400,
+      "Restore the category before restoring this budget",
+    );
+  }
+
+  const conflict = await prisma.budget.findFirst({
+    where: {
+      userId,
+      categoryId: existing.categoryId,
+      month: existing.month,
+      year: existing.year,
+      isArchived: false,
+    },
+  });
+
+  if (conflict) {
+    throw new ApiError(
+      400,
+      "An active budget already exists for this category and month",
+    );
+  }
+
+  try {
+    const budget = await prisma.budget.update({
+      where: { id },
+      data: { isArchived: false },
+    });
+
+    return res
+      .status(200)
+      .json(
+        new ApiResponse(
+          200,
+          serializeAmount(budget),
+          "Budget restored successfully",
+        ),
+      );
+  } catch (error: any) {
+    if (error?.code === "P2002") {
+      throw new ApiError(
+        400,
+        "An active budget already exists for this category and month",
+      );
+    }
+    throw error;
+  }
+};
+
 export {
   createBudget,
   copyBudgets,
@@ -380,4 +452,5 @@ export {
   fetchBudgetSummary,
   updateBudget,
   archiveBudget,
+  restoreBudget,
 };
