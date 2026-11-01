@@ -28,7 +28,9 @@ describe("auth", () => {
     const { loginRes } = await registerAndLogin();
     const names = cookieNames(loginRes);
 
-    expect(names).toEqual(expect.arrayContaining(["accessToken", "refreshToken"]));
+    expect(names).toEqual(
+      expect.arrayContaining(["accessToken", "refreshToken"]),
+    );
     expect(getCookie(loginRes, "accessToken")).toBeTruthy();
     expect(getCookie(loginRes, "refreshToken")).toBeTruthy();
   });
@@ -71,5 +73,33 @@ describe("auth", () => {
 
     expect(reused.status).toBe(401);
     expect(reused.body.success).toBe(false);
+  });
+});
+
+describe("user update ownership", () => {
+  it("rejects updating another user's id and leaves both users unchanged", async () => {
+    const a = await registerAndLogin();
+    const b = await registerAndLogin();
+
+    const res = await b.client
+      .patch(`/api/v1/user/update/${a.user.id}`)
+      .send({ username: `renamed_${Date.now()}` });
+    expect(res.status).toBe(403);
+
+    const profileA = await a.client.get("/api/v1/user/profile");
+    const profileB = await b.client.get("/api/v1/user/profile");
+    expect(profileA.body.data.username).toBe(a.username);
+    expect(profileB.body.data.username).toBe(b.username);
+  });
+
+  it("allows updating your own id", async () => {
+    const a = await registerAndLogin();
+    const newName = `renamed_${Date.now()}`.slice(0, 40);
+
+    const res = await a.client
+      .patch(`/api/v1/user/update/${a.user.id}`)
+      .send({ username: newName });
+    expect(res.status).toBe(200);
+    expect(res.body.data.username).toBe(newName);
   });
 });

@@ -196,6 +196,9 @@ const refreshAccessToken = async (req: Request, res: Response) => {
 const updateUser = async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user?.id;
   if (!userId) throw new ApiError(401, "Unauthorized request");
+  if (req.params.id !== userId) {
+    throw new ApiError(403, "You can only update your own profile");
+  }
   const { username, email } = req.body;
 
   const data = {
