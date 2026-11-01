@@ -3,7 +3,7 @@
 A full-stack personal financial application for tracking income and expenses, setting budgets, and understanding where your money goes, with a dashboard that turns raw transactions into clear visual insight.
 
 ![CI](https://github.com/Rajanv17/Financial-management-webapp/actions/workflows/ci.yml/badge.svg)
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/license/mit)
 
 **Live demo:** _coming soon_
 
@@ -217,7 +217,7 @@ Contributions are welcome.
 
 ## License
 
-This project is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 ---
 
