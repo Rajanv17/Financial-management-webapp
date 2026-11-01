@@ -1,8 +1,13 @@
 import { Response } from "express";
 import { prisma } from "../config";
 import { AuthenticatedRequest } from "../middlewares";
-import { ApiError, ApiResponse, budgetUsage, getMonthRangeIST } from "../utils";
 import {
+  ApiError,
+  ApiResponse,
+  budgetUsage,
+  getMonthRangeIST,
+  getPreviousMonth,
+  spentChange,
   parseAmount,
   parseIntInRange,
   requireId,
@@ -15,6 +20,51 @@ const requireUserId = (req: AuthenticatedRequest): string => {
     throw new ApiError(401, "Unauthorized request");
   }
   return userId;
+};
+
+type DateRange = { start: Date; end: Date };
+
+const getSpentByCategory = async (
+  userId: string,
+  categoryIds: string[],
+  range: DateRange,
+) => {
+  if (categoryIds.length === 0) return new Map<string, number>();
+
+  const rows = await prisma.transaction.groupBy({
+    by: ["categoryId"],
+    where: {
+      userId,
+      type: "expense",
+      date: { gte: range.start, lt: range.end },
+      categoryId: { in: categoryIds },
+    },
+    _sum: { amount: true },
+  });
+
+  return new Map(
+    rows.map((row) => [row.categoryId, Number(row._sum.amount ?? 0)]),
+  );
+};
+
+const getTotalSpent = async (
+  userId: string,
+  categoryIds: string[],
+  range: DateRange,
+) => {
+  if (categoryIds.length === 0) return 0;
+
+  const result = await prisma.transaction.aggregate({
+    where: {
+      userId,
+      type: "expense",
+      date: { gte: range.start, lt: range.end },
+      categoryId: { in: categoryIds },
+    },
+    _sum: { amount: true },
+  });
+
+  return Number(result._sum.amount ?? 0);
 };
 
 const createBudget = async (req: AuthenticatedRequest, res: Response) => {
@@ -96,32 +146,29 @@ const fetchBudgets = async (req: AuthenticatedRequest, res: Response) => {
       .json(new ApiResponse(200, [], "Budgets fetched successfully"));
   }
 
-  const { start, end } = getMonthRangeIST(month, year);
+  const categoryIds = budgets.map((b) => b.categoryId);
+  const previous = getPreviousMonth(month, year);
 
-  const spentRows = await prisma.transaction.groupBy({
-    by: ["categoryId"],
-    where: {
+  const [spentByCategory, previousByCategory] = await Promise.all([
+    getSpentByCategory(userId, categoryIds, getMonthRangeIST(month, year)),
+    getSpentByCategory(
       userId,
-      type: "expense",
-      date: { gte: start, lt: end },
-      categoryId: { in: budgets.map((b) => b.categoryId) },
-    },
-    _sum: { amount: true },
-  });
-
-  const spentByCategory = new Map(
-    spentRows.map((row) => [row.categoryId, Number(row._sum.amount ?? 0)]),
-  );
+      categoryIds,
+      getMonthRangeIST(previous.month, previous.year),
+    ),
+  ]);
 
   const budgetsWithStats = budgets.map((budget) => {
     const amount = Number(budget.amount);
     const spent = spentByCategory.get(budget.categoryId) ?? 0;
+    const previousSpent = previousByCategory.get(budget.categoryId) ?? 0;
     const { percentageUsed, status, remaining } = budgetUsage(spent, amount);
 
     return {
       ...budget,
       amount,
       spent,
+      previousSpent,
       remaining,
       percentageUsed,
       status,
@@ -160,37 +207,43 @@ const fetchBudgetSummary = async (req: AuthenticatedRequest, res: Response) => {
   ]);
 
   const totalBudget = Number(budgetTotals._sum.amount ?? 0);
+  const categoryIds = budgets.map((budget) => budget.categoryId);
+  const previous = getPreviousMonth(month, year);
 
-  const { start, end } = getMonthRangeIST(month, year);
+  const [totalSpent, previousTotalSpent] = await Promise.all([
+    getTotalSpent(userId, categoryIds, getMonthRangeIST(month, year)),
+    getTotalSpent(
+      userId,
+      categoryIds,
+      getMonthRangeIST(previous.month, previous.year),
+    ),
+  ]);
 
-  const spentTotals =
-    budgets.length === 0
-      ? { _sum: { amount: null } }
-      : await prisma.transaction.aggregate({
-          where: {
-            userId,
-            type: "expense",
-            date: { gte: start, lt: end },
-            categoryId: { in: budgets.map((budget) => budget.categoryId) },
-          },
-          _sum: { amount: true },
-        });
-
-  const totalSpent = Number(spentTotals._sum.amount ?? 0);
   const { remaining, percentageUsed } =
     totalBudget === 0
       ? { remaining: 0, percentageUsed: 0 }
       : budgetUsage(totalSpent, totalBudget);
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        { totalBudget, totalSpent, remaining, percentageUsed },
-        "Budget summary fetched successfully",
-      ),
-    );
+  const { spentDelta, spentDeltaPercent } = spentChange(
+    totalSpent,
+    previousTotalSpent,
+  );
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        totalBudget,
+        totalSpent,
+        remaining,
+        percentageUsed,
+        previousTotalSpent,
+        spentDelta,
+        spentDeltaPercent,
+      },
+      "Budget summary fetched successfully",
+    ),
+  );
 };
 
 const updateBudget = async (req: AuthenticatedRequest, res: Response) => {

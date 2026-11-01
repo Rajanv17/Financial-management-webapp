@@ -19,3 +19,6 @@ export const getCurrentMonthIST = (now = new Date()) => {
     year: shifted.getUTCFullYear(),
   };
 };
+
+export const getPreviousMonth = (month: number, year: number) =>
+  month === 1 ? { month: 12, year: year - 1 } : { month: month - 1, year };
