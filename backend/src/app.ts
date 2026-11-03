@@ -30,6 +30,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api", routes);
+app.use("/internal");
 app.use(notFoundHandler);
 app.use(errorHandler);
 
