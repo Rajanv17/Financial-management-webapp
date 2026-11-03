@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Calendar, Pencil, Plus, Trash2 } from "lucide-react";
+import { Calendar, Pause, Play, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   ConfirmDialog,
@@ -11,243 +11,216 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BillFormDialog } from "@/features/recurring/bill-form-dialog";
+import {
+  useDeleteRecurring,
+  usePauseRecurring,
+  useRecurringPayments,
+  useResumeRecurring,
+} from "@/features/recurring/hooks";
 import {
   FREQUENCY_LABELS,
-  type RecurringBill,
-  type RecurringBillFormValues,
+  type RecurringPayment,
 } from "@/features/recurring/types";
-import { PAYMENT_METHOD_LABELS } from "@/features/transactions/types";
 
-// TODO(api): replace with GET /recurring when that backend exists.
-const SAMPLE_BILLS: RecurringBill[] = [
-  {
-    id: "preview-electricity",
-    title: "Electricity bill",
-    amount: 1300,
-    category: "Housing",
-    frequency: "monthly",
-    nextDue: "2026-10-25",
-    paymentMethod: "UPI",
-    description: "",
-  },
-  {
-    id: "preview-internet",
-    title: "Internet",
-    amount: 799,
-    category: "Housing",
-    frequency: "monthly",
-    nextDue: "2026-10-28",
-    paymentMethod: "UPI",
-    description: "",
-  },
-  {
-    id: "preview-netflix",
-    title: "Netflix",
-    amount: 649,
-    category: "Life & Entertainment",
-    frequency: "monthly",
-    nextDue: "2026-11-01",
-    paymentMethod: "CREDIT_CARD",
-    description: "",
-  },
-  {
-    id: "preview-mobile",
-    title: "Mobile recharge",
-    amount: 499,
-    category: "Other financial expense",
-    frequency: "monthly",
-    nextDue: "2026-11-12",
-    paymentMethod: "UPI",
-    description: "",
-  },
-  {
-    id: "preview-rent",
-    title: "House rent",
-    amount: 15000,
-    category: "Housing",
-    frequency: "monthly",
-    nextDue: "2026-11-01",
-    paymentMethod: "BANK_TRANSFER",
-    description: "",
-  },
-];
+type Filter = "active" | "paused";
 
-const formatDueDate = (isoDate: string) =>
+const formatDate = (isoDate: string) =>
   new Intl.DateTimeFormat("en-IN", {
     day: "numeric",
     month: "short",
     year: "numeric",
   }).format(new Date(`${isoDate}T00:00:00`));
 
-const toBill = (
-  values: RecurringBillFormValues,
-  id: string,
-): RecurringBill => ({
-  id,
-  title: values.title.trim(),
-  amount: Number(values.amount),
-  category: values.category,
-  frequency: values.frequency,
-  nextDue: values.nextDue,
-  paymentMethod: values.paymentMethod,
-  description: values.description.trim(),
-});
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Something went wrong";
 
-type RecurringTab = "upcoming" | "history";
+// Inactive and past its end date: the worker deactivated it, it cannot be resumed.
+const hasEnded = (p: RecurringPayment) =>
+  !p.isActive && p.endDate !== null && p.nextDueDate > p.endDate;
+
+function ListSkeleton() {
+  return (
+    <ul
+      className="space-y-3"
+      aria-busy="true"
+      aria-label="Loading recurring payments"
+    >
+      {[0, 1, 2].map((i) => (
+        <li key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+      ))}
+    </ul>
+  );
+}
 
 export default function RecurringPage() {
-  const [bills, setBills] = useState<RecurringBill[]>(SAMPLE_BILLS);
-  const [tab, setTab] = useState<RecurringTab>("upcoming");
-  const [formOpen, setFormOpen] = useState(false);
-  const [formNonce, setFormNonce] = useState(0);
-  const [editing, setEditing] = useState<RecurringBill | null>(null);
-  const [removing, setRemoving] = useState<RecurringBill | null>(null);
+  const [filter, setFilter] = useState<Filter>("active");
+  const [removing, setRemoving] = useState<RecurringPayment | null>(null);
 
-  const openAdd = () => {
-    setEditing(null);
-    setFormNonce((value) => value + 1);
-    setFormOpen(true);
-  };
+  const query = useRecurringPayments();
+  const pause = usePauseRecurring();
+  const resume = useResumeRecurring();
+  const remove = useDeleteRecurring();
+  const busy = pause.isPending || resume.isPending || remove.isPending;
 
-  const handleSubmit = (values: RecurringBillFormValues) => {
-    if (editing) {
-      setBills((current) =>
-        current.map((bill) =>
-          bill.id === editing.id ? toBill(values, editing.id) : bill,
-        ),
+  const payments = (query.data ?? []).filter((p) =>
+    filter === "active" ? p.isActive : !p.isActive,
+  );
+
+  const handlePause = (p: RecurringPayment) =>
+    pause.mutate(p.id, {
+      onSuccess: () => toast.success(`${p.name} paused`),
+      onError: (e) => toast.error(errorMessage(e)),
+    });
+
+  const handleResume = (p: RecurringPayment) =>
+    resume.mutate(p.id, {
+      onSuccess: () => toast.success(`${p.name} resumed`),
+      onError: (e) => toast.error(errorMessage(e)),
+    });
+
+  const renderBody = () => {
+    if (query.isPending) return <ListSkeleton />;
+
+    if (query.isError) {
+      return (
+        <EmptyState
+          title="Could not load recurring payments"
+          description={errorMessage(query.error)}
+          action={
+            <Button type="button" onClick={() => query.refetch()}>
+              Try again
+            </Button>
+          }
+        />
       );
-      toast.success("Preview updated. This is not saved.");
-    } else {
-      setBills((current) => [...current, toBill(values, crypto.randomUUID())]);
-      toast.success("Added to this preview only. Nothing was saved.");
     }
-    setFormOpen(false);
-    setEditing(null);
-    setTab("upcoming");
+
+    if (payments.length === 0) {
+      return filter === "active" ? (
+        <EmptyState
+          title="No active recurring payments"
+          description="Rent, subscriptions and EMIs you add will show up here and create transactions automatically."
+        />
+      ) : (
+        <EmptyState
+          title="Nothing paused or ended"
+          description="Paused and ended payments appear here."
+        />
+      );
+    }
+
+    return (
+      <ul className="space-y-3">
+        {payments.map((p) => (
+          <li key={p.id}>
+            <Card>
+              <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <Calendar className="size-4" />
+                  </span>
+                  <div className="min-w-0 space-y-1">
+                    <p className="font-semibold text-foreground">{p.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {p.isActive
+                        ? `Next due ${formatDate(p.nextDueDate)}`
+                        : hasEnded(p)
+                          ? `Ended ${p.endDate ? formatDate(p.endDate) : ""}`
+                          : "Paused"}{" "}
+                      · {FREQUENCY_LABELS[p.frequency]}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <StatusBadge label={p.category.name} />
+                      <StatusBadge label={p.account.name} />
+                      {!p.isActive ? (
+                        <StatusBadge
+                          label={hasEnded(p) ? "Ended" : "Paused"}
+                          tone="warning"
+                        />
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
+                  <Money
+                    amount={p.amount}
+                    type={p.type}
+                    className="text-lg font-semibold"
+                  />
+                  <div className="flex gap-1">
+                    {p.isActive ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Pause ${p.name}`}
+                        disabled={busy}
+                        onClick={() => handlePause(p)}
+                      >
+                        <Pause />
+                      </Button>
+                    ) : !hasEnded(p) ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Resume ${p.name}`}
+                        disabled={busy}
+                        onClick={() => handleResume(p)}
+                      >
+                        <Play />
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Delete ${p.name}`}
+                      disabled={busy}
+                      onClick={() => setRemoving(p)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </li>
+        ))}
+      </ul>
+    );
   };
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Recurring bills"
-        description="Sample bills for layout. Nothing here is stored until a recurring backend exists."
-        badge={<StatusBadge label="Preview – not saved" tone="warning" />}
-        action={
-          <Button type="button" onClick={openAdd}>
-            <Plus />
-            Add bill
-          </Button>
-        }
+        title="Recurring payments"
+        description="Bills, subscriptions and income that repeat. Transactions are created automatically on the due date."
       />
 
-      <Tabs value={tab} onValueChange={(value) => setTab(value as RecurringTab)}>
+      <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
         <TabsList>
-          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="active">Active</TabsTrigger>
+          <TabsTrigger value="paused">Paused / ended</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {tab === "history" ? (
-        <EmptyState
-          title="No payment history yet"
-          description="When recurring bills have a backend, generated payments will appear here. This preview does not create transactions."
-        />
-      ) : bills.length === 0 ? (
-        <EmptyState
-          title="No upcoming bills"
-          description="Add a bill to see how this list will look. It stays in this browser tab only."
-          action={
-            <Button type="button" onClick={openAdd}>
-              <Plus />
-              Add bill
-            </Button>
-          }
-        />
-      ) : (
-        <ul className="space-y-3">
-          {bills.map((bill) => (
-            <li key={bill.id}>
-              <Card>
-                <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Calendar className="size-4" />
-                    </span>
-                    <div className="min-w-0 space-y-1">
-                      <p className="font-semibold text-foreground">{bill.title}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Next due {formatDueDate(bill.nextDue)} ·{" "}
-                        {FREQUENCY_LABELS[bill.frequency]}
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        <StatusBadge label={bill.category} />
-                        <StatusBadge
-                          label={PAYMENT_METHOD_LABELS[bill.paymentMethod]}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
-                    <Money
-                      amount={bill.amount}
-                      type="expense"
-                      className="text-lg font-semibold"
-                    />
-                    <div className="flex gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Edit ${bill.title}`}
-                        onClick={() => {
-                          setEditing(bill);
-                          setFormOpen(true);
-                        }}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Remove ${bill.title}`}
-                        onClick={() => setRemoving(bill)}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <BillFormDialog
-        key={editing?.id ?? `new-bill-${formNonce}`}
-        open={formOpen}
-        bill={editing}
-        onOpenChange={(open) => {
-          setFormOpen(open);
-          if (!open) setEditing(null);
-        }}
-        onSubmit={handleSubmit}
-      />
+      {renderBody()}
 
       <ConfirmDialog
         open={removing !== null}
         onOpenChange={(open) => {
           if (!open) setRemoving(null);
         }}
-        title="Remove this preview bill?"
-        description="It will disappear from this page only. Nothing is stored on the server."
-        confirmLabel="Remove"
+        title="Delete this recurring payment?"
+        description="Future transactions will stop. Transactions it already created stay in your history."
+        confirmLabel="Delete"
         onConfirm={() => {
-          if (removing) {
-            setBills((current) => current.filter((bill) => bill.id !== removing.id));
-          }
+          if (!removing) return;
+          remove.mutate(removing.id, {
+            onSuccess: () => toast.success(`${removing.name} deleted`),
+            onError: (e) => toast.error(errorMessage(e)),
+          });
           setRemoving(null);
         }}
       />
