@@ -39,6 +39,7 @@ import {
   archiveAccount,
   restoreAccount,
 } from "./account.controller";
+import { runRecurringPayments } from "./recurring-internal.controller";
 
 export {
   registerUser,
@@ -72,4 +73,5 @@ export {
   updateAccount,
   archiveAccount,
   restoreAccount,
+  runRecurringPayments,
 };
