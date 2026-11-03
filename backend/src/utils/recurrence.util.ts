@@ -5,6 +5,7 @@
 export type RecurrenceFrequency = "weekly" | "monthly" | "yearly";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 function daysInMonth(year: number, monthIndex: number): number {
   // Day 0 of the next month = last day of this month.
@@ -76,4 +77,17 @@ export function nextOccurrenceAfter(
     n++;
   }
   return occurrenceAt(startDate, frequency, n);
+}
+
+/** Today's calendar date in IST, as a UTC-midnight Date (same shape as a @db.Date column). */
+export function todayIST(now: Date = new Date()): Date {
+  const ist = new Date(now.getTime() + IST_OFFSET_MS);
+  return new Date(
+    Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()),
+  );
+}
+
+/** The instant of 00:00 IST on a calendar date. Used as the generated transaction's date. */
+export function istMidnight(date: Date): Date {
+  return new Date(date.getTime() - IST_OFFSET_MS);
 }

@@ -27,6 +27,7 @@ await seedDefaultCategories();
 
 beforeEach(async () => {
   await prisma.transaction.deleteMany();
+  await prisma.recurringPayment.deleteMany();
   await prisma.budget.deleteMany();
   await prisma.financialAccount.deleteMany();
   await prisma.category.deleteMany({ where: { isDefault: false } });

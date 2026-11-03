@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextOccurrenceAfter, occurrenceAt } from "./recurrence.util";
+import { nextOccurrenceAfter, occurrenceAt, todayIST } from "./recurrence.util";
 
 const d = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 const iso = (date: Date) => date.toISOString().slice(0, 10);
@@ -79,5 +79,16 @@ describe("nextOccurrenceAfter", () => {
     expect(
       iso(nextOccurrenceAfter(d("2026-05-10"), "monthly", d("2026-01-01"))),
     ).toBe("2026-05-10");
+  });
+});
+
+describe("todayIST", () => {
+  it("rolls to the next IST date after 18:30 UTC", () => {
+    expect(iso(todayIST(new Date("2026-11-03T20:00:00.000Z")))).toBe(
+      "2026-11-04",
+    );
+    expect(iso(todayIST(new Date("2026-11-03T10:00:00.000Z")))).toBe(
+      "2026-11-03",
+    );
   });
 });
