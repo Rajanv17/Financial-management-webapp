@@ -39,6 +39,17 @@ import {
   archiveAccount,
   restoreAccount,
 } from "./account.controller";
+import { runRecurringPayments } from "./recurring-internal.controller";
+import {
+  createRecurringPayment,
+  fetchRecurringPayments,
+  fetchRecurringPaymentById,
+  updateRecurringPayment,
+  pauseRecurringPayment,
+  resumeRecurringPayment,
+  deleteRecurringPayment,
+  fetchExecutions,
+} from "./recurring.controller";
 
 export {
   registerUser,
@@ -72,4 +83,13 @@ export {
   updateAccount,
   archiveAccount,
   restoreAccount,
+  runRecurringPayments,
+  createRecurringPayment,
+  fetchRecurringPayments,
+  fetchRecurringPaymentById,
+  updateRecurringPayment,
+  pauseRecurringPayment,
+  resumeRecurringPayment,
+  deleteRecurringPayment,
+  fetchExecutions,
 };
