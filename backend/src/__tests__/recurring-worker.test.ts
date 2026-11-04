@@ -11,7 +11,6 @@ import {
 const d = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 const iso = (date: Date) => date.toISOString().slice(0, 10);
 
-// 15:30 IST on 3 Nov 2026
 const NOW = new Date("2026-11-03T10:00:00.000Z");
 
 async function seed(opts: {
@@ -27,7 +26,6 @@ async function seed(opts: {
     ? await createAccount(client, { name: "Rent account" })
     : await defaultAccount(client);
 
-  // Get the owner id from the DB so we don't depend on what the helpers return.
   const row = await prisma.financialAccount.findUniqueOrThrow({
     where: { id: account.id },
   });
@@ -55,6 +53,11 @@ const txnCount = (userId: string) =>
   prisma.transaction.count({ where: { userId } });
 const reload = (id: string) =>
   prisma.recurringPayment.findUniqueOrThrow({ where: { id } });
+const notesFor = (userId: string) =>
+  prisma.notification.findMany({
+    where: { userId },
+    orderBy: { createdAt: "asc" },
+  });
 
 describe("processDueRecurringPayments", () => {
   it("creates exactly one transaction when run twice", async () => {
@@ -84,7 +87,6 @@ describe("processDueRecurringPayments", () => {
   });
 
   it("catches up on every missed occurrence", async () => {
-    // Aug 3, Sep 3, Oct 3, Nov 3
     const { userId, payment } = await seed({ start: "2026-08-03" });
 
     await processDueRecurringPayments(NOW);
@@ -117,7 +119,6 @@ describe("processDueRecurringPayments", () => {
   });
 
   it("stops and deactivates after endDate", async () => {
-    // Aug 3 and Sep 3 only
     const { userId, payment } = await seed({
       start: "2026-08-03",
       endDate: "2026-09-30",
@@ -137,5 +138,87 @@ describe("processDueRecurringPayments", () => {
     await processDueRecurringPayments(NOW);
 
     expect(await txnCount(userId)).toBe(0);
+  });
+});
+
+describe("recurring notifications", () => {
+  it("creates one 'created' notification, even when run twice", async () => {
+    const { userId, payment } = await seed({ start: "2026-11-03" });
+
+    await processDueRecurringPayments(NOW);
+    await processDueRecurringPayments(NOW);
+
+    const notes = await notesFor(userId);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("recurring_created");
+    expect(notes[0].dedupeKey).toBe(
+      `recurring:${payment.id}:2026-11-03:created`,
+    );
+    expect(notes[0].message).toContain("499");
+  });
+
+  it("creates one notification when two runs happen concurrently", async () => {
+    const { userId } = await seed({ start: "2026-11-03" });
+
+    await Promise.all([
+      processDueRecurringPayments(NOW),
+      processDueRecurringPayments(NOW),
+    ]);
+
+    expect(await notesFor(userId)).toHaveLength(1);
+  });
+
+  it("creates a 'skipped' notification with the reason", async () => {
+    const { client, account, userId } = await seed({
+      start: "2026-11-03",
+      useSecondAccount: true,
+    });
+    await client.patch(`/api/v1/accounts/archive/${account.id}`);
+
+    await processDueRecurringPayments(NOW);
+
+    const notes = await notesFor(userId);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("recurring_skipped");
+    expect(notes[0].message).toContain("Account is archived");
+  });
+
+  it("creates one notification per caught-up occurrence", async () => {
+    const { userId } = await seed({ start: "2026-08-03" }); // Aug, Sep, Oct, Nov
+
+    await processDueRecurringPayments(NOW);
+    await processDueRecurringPayments(NOW);
+
+    const notes = await notesFor(userId);
+    expect(notes).toHaveLength(4);
+    expect(new Set(notes.map((n) => n.dedupeKey)).size).toBe(4);
+  });
+
+  it("creates a due-soon reminder once when the due date is 3 days away", async () => {
+    const { userId, payment } = await seed({ start: "2026-11-06" });
+
+    await processDueRecurringPayments(NOW);
+    await processDueRecurringPayments(NOW);
+
+    const notes = await notesFor(userId);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].type).toBe("recurring_due_soon");
+    expect(notes[0].title).toContain("in 3 days");
+    expect(notes[0].dedupeKey).toBe(
+      `recurring:${payment.id}:2026-11-06:due_soon`,
+    );
+    expect(await txnCount(userId)).toBe(0); // reminder must not create a transaction
+  });
+
+  it("sends no reminder when the due date is outside the window", async () => {
+    const { userId } = await seed({ start: "2026-11-07" }); // 4 days away
+    await processDueRecurringPayments(NOW);
+    expect(await notesFor(userId)).toHaveLength(0);
+  });
+
+  it("sends no reminder for a paused payment", async () => {
+    const { userId } = await seed({ start: "2026-11-06", isActive: false });
+    await processDueRecurringPayments(NOW);
+    expect(await notesFor(userId)).toHaveLength(0);
   });
 });
