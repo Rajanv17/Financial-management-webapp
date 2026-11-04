@@ -46,6 +46,14 @@ enum ExecutionStatus {
   skipped
 }
 
+enum NotificationType {
+  recurring_due_soon
+  recurring_created
+  recurring_skipped
+  budget_near_limit
+  budget_exceeded
+}
+
 model User {
   id           String   @id @default(uuid()) @db.Uuid
   username     String   @unique @db.VarChar(50)
@@ -60,6 +68,7 @@ model User {
   budgets           Budget[]
   accounts          FinancialAccount[]
   recurringPayments RecurringPayment[]
+  notification      Notification[]
 
   @@map("users")
 }
@@ -128,8 +137,6 @@ model Budget {
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
 
-  // Partial unique index in migration 20261018123000_budgets_active_unique:
-  // (user_id, category_id, month, year) WHERE is_archived = false.
   @@index([userId, year, month])
   @@map("budgets")
 }
@@ -180,7 +187,6 @@ model RecurringPayment {
   category   Category             @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   executions RecurringExecution[]
 
-  // The worker's query: active items that are due.
   @@index([isActive, nextDueDate])
   @@index([userId])
   @@map("recurring_payments")
@@ -197,7 +203,24 @@ model RecurringExecution {
 
   recurringPayment RecurringPayment @relation(fields: [recurringPaymentId], references: [id], onDelete: Cascade)
 
-  // The idempotency guarantee: one execution per payment per scheduled date.
   @@unique([recurringPaymentId, scheduledFor])
   @@map("recurring_executions")
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String           @db.VarChar(120)
+  message   String           @db.VarChar(500)
+  data      Json?
+  dedupeKey String           @map("dedupe_key") @db.VarChar(200)
+  readAt    DateTime?        @map("read_at") @db.Timestamptz(3)
+  createdAt DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dedupeKey])
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
 }
