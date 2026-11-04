@@ -10,7 +10,8 @@ import {
   formatDisplayDate,
   formatInr,
 } from "../utils/notificationMessages";
-import { createNotification } from "./notification.service";
+import { createNotification } from "./index";
+import { checkBudgetThresholdsSafe, istYearMonth } from "./index";
 
 const REMINDER_DAYS = 3;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -136,6 +137,15 @@ async function processOccurrence(
         data: { nextDueDate: next, ...(ended ? { isActive: false } : {}) },
       });
     });
+
+    if (!blockedReason && payment.type === "expense") {
+      await checkBudgetThresholdsSafe({
+        userId: payment.userId,
+        categoryId: payment.categoryId,
+        ...istYearMonth(istMidnight(scheduledFor)),
+      });
+    }
+
     return blockedReason ? "skipped" : "created";
   } catch (error) {
     if (isUniqueViolation(error)) return "alreadyProcessed";

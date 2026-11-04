@@ -207,11 +207,11 @@ describe("recurring notifications", () => {
     expect(notes[0].dedupeKey).toBe(
       `recurring:${payment.id}:2026-11-06:due_soon`,
     );
-    expect(await txnCount(userId)).toBe(0); // reminder must not create a transaction
+    expect(await txnCount(userId)).toBe(0);
   });
 
   it("sends no reminder when the due date is outside the window", async () => {
-    const { userId } = await seed({ start: "2026-11-07" }); // 4 days away
+    const { userId } = await seed({ start: "2026-11-07" });
     await processDueRecurringPayments(NOW);
     expect(await notesFor(userId)).toHaveLength(0);
   });
@@ -220,5 +220,26 @@ describe("recurring notifications", () => {
     const { userId } = await seed({ start: "2026-11-06", isActive: false });
     await processDueRecurringPayments(NOW);
     expect(await notesFor(userId)).toHaveLength(0);
+  });
+});
+
+describe("recurring + budget alerts", () => {
+  it("a recurring expense that pushes a budget past 80% creates both notifications", async () => {
+    const { userId, payment } = await seed({ start: "2026-11-03" });
+    await prisma.budget.create({
+      data: {
+        userId,
+        categoryId: payment.categoryId,
+        amount: 600,
+        month: 11,
+        year: 2026,
+      },
+    });
+
+    await processDueRecurringPayments(NOW);
+    await processDueRecurringPayments(NOW);
+
+    const types = (await notesFor(userId)).map((n) => n.type).sort();
+    expect(types).toEqual(["budget_near_limit", "recurring_created"]);
   });
 });
