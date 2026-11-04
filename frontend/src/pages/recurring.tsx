@@ -1,60 +1,52 @@
 import { useState } from "react";
-import { Calendar, Pause, Play, Trash2 } from "lucide-react";
+import { CalendarClock, Pause, Plus, Repeat } from "lucide-react";
 import { toast } from "sonner";
 import {
   ConfirmDialog,
   EmptyState,
-  Money,
   PageHeader,
-  StatusBadge,
+  StatCard,
 } from "@/components/shared";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatDate } from "@/features/recurring/format";
 import {
   useDeleteRecurring,
   usePauseRecurring,
   useRecurringPayments,
   useResumeRecurring,
 } from "@/features/recurring/hooks";
-import {
-  FREQUENCY_LABELS,
-  type RecurringPayment,
-} from "@/features/recurring/types";
+import { RecurringCard } from "@/features/recurring/recurring-card";
+import { RecurringFormDialog } from "@/features/recurring/recurring-form-dialog";
+import type { RecurringPayment } from "@/features/recurring/types";
 
 type Filter = "active" | "paused";
 
-const formatDate = (isoDate: string) =>
-  new Intl.DateTimeFormat("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(`${isoDate}T00:00:00`));
+const GRID = "grid gap-4 md:grid-cols-2 xl:grid-cols-3";
 
 const errorMessage = (error: unknown) =>
   error instanceof Error ? error.message : "Something went wrong";
 
-// Inactive and past its end date: the worker deactivated it, it cannot be resumed.
-const hasEnded = (p: RecurringPayment) =>
-  !p.isActive && p.endDate !== null && p.nextDueDate > p.endDate;
-
 function ListSkeleton() {
   return (
-    <ul
-      className="space-y-3"
+    <div
+      className={GRID}
       aria-busy="true"
       aria-label="Loading recurring payments"
     >
       {[0, 1, 2].map((i) => (
-        <li key={i} className="h-24 animate-pulse rounded-xl bg-muted" />
+        <div key={i} className="h-36 animate-pulse rounded-xl bg-muted" />
       ))}
-    </ul>
+    </div>
   );
 }
 
 export default function RecurringPage() {
   const [filter, setFilter] = useState<Filter>("active");
   const [removing, setRemoving] = useState<RecurringPayment | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [formNonce, setFormNonce] = useState(0);
+  const [editing, setEditing] = useState<RecurringPayment | null>(null);
 
   const query = useRecurringPayments();
   const pause = usePauseRecurring();
@@ -62,9 +54,25 @@ export default function RecurringPage() {
   const remove = useDeleteRecurring();
   const busy = pause.isPending || resume.isPending || remove.isPending;
 
-  const payments = (query.data ?? []).filter((p) =>
-    filter === "active" ? p.isActive : !p.isActive,
+  const all = query.data ?? [];
+  const activeList = all.filter((p) => p.isActive);
+  const inactiveList = all.filter((p) => !p.isActive);
+  const visible = filter === "active" ? activeList : inactiveList;
+  const nextUp = activeList.reduce<RecurringPayment | null>(
+    (soonest, p) =>
+      soonest === null || p.nextDueDate < soonest.nextDueDate ? p : soonest,
+    null,
   );
+
+  const openAdd = () => {
+    setEditing(null);
+    setFormNonce((n) => n + 1);
+    setFormOpen(true);
+  };
+  const openEdit = (p: RecurringPayment) => {
+    setEditing(p);
+    setFormOpen(true);
+  };
 
   const handlePause = (p: RecurringPayment) =>
     pause.mutate(p.id, {
@@ -95,11 +103,17 @@ export default function RecurringPage() {
       );
     }
 
-    if (payments.length === 0) {
+    if (visible.length === 0) {
       return filter === "active" ? (
         <EmptyState
           title="No active recurring payments"
           description="Rent, subscriptions and EMIs you add will show up here and create transactions automatically."
+          action={
+            <Button type="button" onClick={openAdd}>
+              <Plus />
+              Add payment
+            </Button>
+          }
         />
       ) : (
         <EmptyState
@@ -110,81 +124,17 @@ export default function RecurringPage() {
     }
 
     return (
-      <ul className="space-y-3">
-        {payments.map((p) => (
+      <ul className={GRID}>
+        {visible.map((p) => (
           <li key={p.id}>
-            <Card>
-              <CardContent className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex min-w-0 items-start gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Calendar className="size-4" />
-                  </span>
-                  <div className="min-w-0 space-y-1">
-                    <p className="font-semibold text-foreground">{p.name}</p>
-                    <p className="text-sm text-muted-foreground">
-                      {p.isActive
-                        ? `Next due ${formatDate(p.nextDueDate)}`
-                        : hasEnded(p)
-                          ? `Ended ${p.endDate ? formatDate(p.endDate) : ""}`
-                          : "Paused"}{" "}
-                      · {FREQUENCY_LABELS[p.frequency]}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <StatusBadge label={p.category.name} />
-                      <StatusBadge label={p.account.name} />
-                      {!p.isActive ? (
-                        <StatusBadge
-                          label={hasEnded(p) ? "Ended" : "Paused"}
-                          tone="warning"
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
-                  <Money
-                    amount={p.amount}
-                    type={p.type}
-                    className="text-lg font-semibold"
-                  />
-                  <div className="flex gap-1">
-                    {p.isActive ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Pause ${p.name}`}
-                        disabled={busy}
-                        onClick={() => handlePause(p)}
-                      >
-                        <Pause />
-                      </Button>
-                    ) : !hasEnded(p) ? (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Resume ${p.name}`}
-                        disabled={busy}
-                        onClick={() => handleResume(p)}
-                      >
-                        <Play />
-                      </Button>
-                    ) : null}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      aria-label={`Delete ${p.name}`}
-                      disabled={busy}
-                      onClick={() => setRemoving(p)}
-                    >
-                      <Trash2 />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <RecurringCard
+              payment={p}
+              busy={busy}
+              onEdit={openEdit}
+              onPause={handlePause}
+              onResume={handleResume}
+              onDelete={setRemoving}
+            />
           </li>
         ))}
       </ul>
@@ -196,16 +146,57 @@ export default function RecurringPage() {
       <PageHeader
         title="Recurring payments"
         description="Bills, subscriptions and income that repeat. Transactions are created automatically on the due date."
+        action={
+          <Button type="button" onClick={openAdd}>
+            <Plus />
+            Add payment
+          </Button>
+        }
       />
+
+      {query.isSuccess && all.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <StatCard label="Active" value={activeList.length} icon={Repeat} />
+          <StatCard
+            label="Paused / ended"
+            value={inactiveList.length}
+            icon={Pause}
+          />
+          <StatCard
+            label="Next due"
+            icon={CalendarClock}
+            value={
+              <span className="block truncate">
+                {nextUp ? nextUp.name : "—"}
+              </span>
+            }
+            description={
+              nextUp ? formatDate(nextUp.nextDueDate) : "Nothing scheduled"
+            }
+          />
+        </div>
+      ) : null}
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
         <TabsList>
-          <TabsTrigger value="active">Active</TabsTrigger>
-          <TabsTrigger value="paused">Paused / ended</TabsTrigger>
+          <TabsTrigger value="active">Active ({activeList.length})</TabsTrigger>
+          <TabsTrigger value="paused">
+            Paused / ended ({inactiveList.length})
+          </TabsTrigger>
         </TabsList>
       </Tabs>
 
       {renderBody()}
+
+      <RecurringFormDialog
+        key={editing?.id ?? `new-${formNonce}`}
+        open={formOpen}
+        payment={editing}
+        onOpenChange={(open) => {
+          setFormOpen(open);
+          if (!open) setEditing(null);
+        }}
+      />
 
       <ConfirmDialog
         open={removing !== null}

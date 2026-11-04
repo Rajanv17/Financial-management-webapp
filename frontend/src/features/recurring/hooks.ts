@@ -9,6 +9,8 @@ import {
   updateRecurringPayment,
 } from "./api";
 import type { RecurringUpdatePayload } from "./types";
+import { fetchAccounts } from "@/features/accounts/api";
+import { fetchCategories } from "@/features/categories/api";
 
 export const recurringKeys = {
   all: ["recurring"] as const,
@@ -49,6 +51,18 @@ export const useUpdateRecurring = () =>
     ({ id, input }: { id: string; input: RecurringUpdatePayload }) =>
       updateRecurringPayment(id, input),
   );
+
+export const useAccountOptions = () =>
+  useQuery({
+    queryKey: ["recurring-options", "accounts"],
+    queryFn: () => fetchAccounts(false),
+  });
+
+export const useCategoryOptions = () =>
+  useQuery({
+    queryKey: ["recurring-options", "categories"],
+    queryFn: () => fetchCategories(false),
+  });
 
 export const usePauseRecurring = () =>
   useRecurringMutation(pauseRecurringPayment);
