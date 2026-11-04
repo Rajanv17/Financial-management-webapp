@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
 import {
   createRecurringPayment,
   deleteRecurringPayment,
@@ -30,6 +35,7 @@ export const useRecurringExecutions = (id: string | null, page: number) =>
     queryKey: recurringKeys.executions(id ?? "", page),
     queryFn: () => fetchRecurringExecutions(id as string, page),
     enabled: id !== null,
+    placeholderData: keepPreviousData,
   });
 
 function useRecurringMutation<TVars, TData>(

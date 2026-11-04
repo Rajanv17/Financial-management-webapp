@@ -1,6 +1,7 @@
 import {
   ArrowDownLeft,
   ArrowUpRight,
+  History,
   Pause,
   Pencil,
   Play,
@@ -16,6 +17,7 @@ import { FREQUENCY_LABELS, type RecurringPayment } from "./types";
 type Props = {
   payment: RecurringPayment;
   busy: boolean;
+  onHistory: (p: RecurringPayment) => void;
   onEdit: (p: RecurringPayment) => void;
   onPause: (p: RecurringPayment) => void;
   onResume: (p: RecurringPayment) => void;
@@ -25,6 +27,7 @@ type Props = {
 export function RecurringCard({
   payment: p,
   busy,
+  onHistory,
   onEdit,
   onPause,
   onResume,
@@ -136,6 +139,16 @@ export function RecurringCard({
             onClick={() => onDelete(p)}
           >
             <Trash2 />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            aria-label={`History for ${p.name}`}
+            title="History"
+            onClick={() => onHistory(p)}
+          >
+            <History />
           </Button>
         </div>
       </div>

@@ -34,6 +34,7 @@ A full-stack personal financial application for tracking income and expenses, se
 - **Categories**: organize transactions with custom categories.
 - **Accounts**: bank, cash, wallet, and credit card balances, with a default Unassigned account for new users.
 - **Monthly budgets**: track category budgets with progress and status, compare spending month over month, copy budgets from the previous month, and archive or restore budgets.
+- **Recurring payments**: schedule income or expenses to be created automatically, pause or resume schedules, and review execution history.
 - **Dashboard**: overview of income, expenses, and financial health with charts.
 
 ---
@@ -159,6 +160,7 @@ Copy `.env.example` to `.env` in each app folder and fill in the values. Never c
 | `AUTH_RATE_LIMIT_WINDOW_MS`                     | Rate-limit window in milliseconds (default `900000`, 15 minutes)                                                                 |
 | `DEMO_USERNAME`                                 | Optional. Username for `npm run seed:demo` (defaults to `demo`). The script looks up an existing user and never creates accounts |
 | `DEMO_USERNAME_ALLOW`                           | Optional. Set to allow seeding a username other than `demo`                                                                      |
+| `RECURRING_CRON_SECRET`                         | Secret required by the internal recurring-payment runner's `x-cron-secret` header                                                |
 
 ### Frontend (`frontend/.env`)
 
