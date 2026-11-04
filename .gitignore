@@ -98,6 +98,7 @@ uploads/*
 *.swp
 *.swo
 .launch.json
+.vscode/
 
 # Operating system
 .DS_Store
