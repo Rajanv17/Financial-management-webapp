@@ -82,3 +82,7 @@ Execution history cascades, but transactions it already created stay, because th
 ### Frequencies limited to weekly, monthly, yearly
 
 Quarterly, custom cron, reminders and "remind only" mode are postponed (reminders belong to the Notifications module).
+
+### Recurring page shows counts and next due, not a monthly total
+
+A monthly total needs weekly/yearly amounts converted to a monthly figure. Money math stays on the server, so a total would come from a summary endpoint, not the UI.
