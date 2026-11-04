@@ -19,6 +19,7 @@ import {
 import { RecurringCard } from "@/features/recurring/recurring-card";
 import { RecurringFormDialog } from "@/features/recurring/recurring-form-dialog";
 import type { RecurringPayment } from "@/features/recurring/types";
+import { RecurringHistorySheet } from "@/features/recurring/recurring-history-sheet";
 
 type Filter = "active" | "paused";
 
@@ -47,6 +48,7 @@ export default function RecurringPage() {
   const [formOpen, setFormOpen] = useState(false);
   const [formNonce, setFormNonce] = useState(0);
   const [editing, setEditing] = useState<RecurringPayment | null>(null);
+  const [historyFor, setHistoryFor] = useState<RecurringPayment | null>(null);
 
   const query = useRecurringPayments();
   const pause = usePauseRecurring();
@@ -130,6 +132,7 @@ export default function RecurringPage() {
             <RecurringCard
               payment={p}
               busy={busy}
+              onHistory={setHistoryFor}
               onEdit={openEdit}
               onPause={handlePause}
               onResume={handleResume}
@@ -196,6 +199,12 @@ export default function RecurringPage() {
           setFormOpen(open);
           if (!open) setEditing(null);
         }}
+      />
+
+      <RecurringHistorySheet
+        key={historyFor?.id ?? "none"}
+        payment={historyFor}
+        onClose={() => setHistoryFor(null)}
       />
 
       <ConfirmDialog
