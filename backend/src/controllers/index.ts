@@ -50,6 +50,12 @@ import {
   deleteRecurringPayment,
   fetchExecutions,
 } from "./recurring.controller";
+import {
+  fetchNotifications,
+  fetchUnreadCount,
+  markNotificationRead,
+  markAllNotificationsRead,
+} from "./notification.controller";
 
 export {
   registerUser,
@@ -92,4 +98,8 @@ export {
   resumeRecurringPayment,
   deleteRecurringPayment,
   fetchExecutions,
+  fetchNotifications,
+  fetchUnreadCount,
+  markNotificationRead,
+  markAllNotificationsRead,
 };
