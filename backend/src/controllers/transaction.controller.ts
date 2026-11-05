@@ -16,6 +16,7 @@ import {
 } from "../utils/index";
 import { AuthenticatedRequest } from "../middlewares/index";
 import { PaymentMethod, TransactionType } from "../generated/prisma/enums";
+import { checkBudgetThresholdsSafe, istYearMonth } from "../services";
 
 const TRANSACTION_TYPES = Object.values(TransactionType);
 const PAYMENT_METHODS = Object.values(PaymentMethod);
@@ -113,6 +114,14 @@ const createTransaction = async (req: AuthenticatedRequest, res: Response) => {
       paymentMethod,
     },
   });
+
+  if (transaction.type === "expense") {
+    await checkBudgetThresholdsSafe({
+      userId,
+      categoryId: transaction.categoryId,
+      ...istYearMonth(transaction.date),
+    });
+  }
 
   return res
     .status(201)
@@ -310,6 +319,14 @@ const updateTransaction = async (req: AuthenticatedRequest, res: Response) => {
     where: { id: transactionId },
     data,
   });
+
+  if (transaction.type === "expense") {
+    await checkBudgetThresholdsSafe({
+      userId,
+      categoryId: transaction.categoryId,
+      ...istYearMonth(transaction.date),
+    });
+  }
 
   return res
     .status(200)

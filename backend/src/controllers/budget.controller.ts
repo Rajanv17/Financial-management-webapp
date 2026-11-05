@@ -13,6 +13,7 @@ import {
   requireId,
   serializeAmount,
 } from "../utils";
+import { checkBudgetThresholdsSafe } from "../services";
 
 const requireUserId = (req: AuthenticatedRequest): string => {
   const userId = req.user?.id;
@@ -108,6 +109,8 @@ const createBudget = async (req: AuthenticatedRequest, res: Response) => {
     const budget = await prisma.budget.create({
       data: { userId, categoryId, amount, month, year },
     });
+
+    await checkBudgetThresholdsSafe({ userId, categoryId, month, year });
 
     return res
       .status(201)
@@ -342,6 +345,13 @@ const updateBudget = async (req: AuthenticatedRequest, res: Response) => {
   }
 
   const budget = await prisma.budget.update({ where: { id }, data });
+
+  await checkBudgetThresholdsSafe({
+    userId,
+    categoryId: budget.categoryId,
+    month: budget.month,
+    year: budget.year,
+  });
 
   return res
     .status(200)

@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
+import { notificationKeys } from "@/features/notifications/hooks";
 
 export const invalidateAfterTransactionChange = (queryClient: QueryClient) =>
   Promise.all([
@@ -7,4 +8,5 @@ export const invalidateAfterTransactionChange = (queryClient: QueryClient) =>
     queryClient.invalidateQueries({ queryKey: queryKeys.budgets.all }),
     queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.all }),
     queryClient.invalidateQueries({ queryKey: queryKeys.accounts.all }),
+    queryClient.invalidateQueries({ queryKey: notificationKeys.all }),
   ]);
