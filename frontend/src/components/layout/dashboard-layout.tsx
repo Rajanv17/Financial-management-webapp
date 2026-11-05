@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "../theme-toggle";
+import { NotificationBell } from "@/features/notifications/notification-bell";
 
 export function DashboardLayout() {
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ export function DashboardLayout() {
           <header className="flex h-14 items-center gap-3 border-b border-border px-6 bg-card">
             <SidebarTrigger className="hidden text-foreground transition-[width] duration-200 md:inline-flex" />
             <div className="ml-auto flex items-center gap-2">
+              <NotificationBell />
               <ThemeToggle />
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
